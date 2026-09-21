@@ -107,15 +107,45 @@ repository内のscriptを利用するときである。
 
 workflowを書く前に、次の問いへの予想を記録する。
 
-- [ ] workflowファイルはrepository内のどこへ置くか
+- [x] workflowファイルはrepository内のどこへ置くか: `.github/workflows/`
 - [x] pushされたことをYAMLのどの項目で指定するか: `on`
 - [x] jobを動かすOSをどこで指定するか: jobの`runs-on`
 - [x] `Hello, world!`を実行するcommandをどこへ書くか: stepの`run`
-- [ ] repositoryのcheckoutなしで`echo`を実行できるか
+- [x] repositoryのcheckoutなしで`echo`を実行できるか: 実行できる
 
 ## 試したことと結果
 
-壁打ちと実装の進行に合わせて追記する。
+`lesson/00-hello-world`をpushし、workflow run
+[35585930288](https://github.com/urchin-hat/study-github-action/actions/runs/35585930288)を実行した。
+
+結果は成功。`actions/checkout`を使っていなくても、Runner上のshellで`echo`が実行され、
+ログに`hello,world`と表示された。
+
+実行ログから次のことも確認できた。
+
+- `ubuntu-latest`としてUbuntu 24.04のGitHub-hosted Runnerが割り当てられた
+- 記述したstepの前後に`Set up job`と`Complete job`が自動的に実行された
+- `run`は既定で`/usr/bin/bash -e`を使って実行された
+- job IDの`hello`とstep名の`Hello, World`がログ上の異なる階層に表示された
+- repositoryをcheckoutするstepは存在しなかった
+
+この結果から、Runnerを用意することとrepositoryの内容をRunnerへ取得することは別の処理だと
+確認できた。
+
+### 2026-09-21: 意図的な失敗方法を検討
+
+失敗させる方法として、Ubuntu Runnerに存在しないcommandの実行と`exit 1`を予想した。
+どちらも非0のexit codeになるため、stepは失敗する。
+
+- 存在しないcommand: shellでは通常exit code 127になるが、名前の間違いなのか意図した失敗かが曖昧
+- `exit 1`: 意図した場所で明示的に失敗させられ、結果を予想しやすい
+
+今回は、まずメッセージを出力してから`exit 1`を実行する。複数行のcommandを書くため、YAMLの
+block scalarである`|`を使う。
+
+最初の修正では`run: | `のように`|`の後ろへ空白が残り、`git diff --check`でtrailing
+whitespaceとして検出された。workflowの意味とは直接関係しない空白でも、レビュー時の不要な
+差分やlintエラーを避けるため削除する。
 
 ## つまずいた点
 
