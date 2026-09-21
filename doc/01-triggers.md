@@ -52,6 +52,81 @@ Chapter 00のメモだけをpushしたときにもrunが作成された。path f
 PR #12と追加メモを含む変更が`main`へmergeされた後、最新の`main`から
 `lesson/01-triggers`を作成した。
 
+### 2026-09-21: 複数eventの指定方法を予想
+
+`push`、Pull Request、手動実行をまとめて指定する方法として`all`を予想した。
+GitHub Actionsにすべてのeventを意味する`all`指定はなく、受け取りたいeventを明示的に列挙する。
+
+今回必要なevent名は次の3つ。
+
+- `push`
+- `pull_request`
+- `workflow_dispatch`
+
+filterやeventごとの設定が不要な段階では、`on`の値を配列にする短縮形で指定できる。
+
+複数eventを「`push`や`pull_request`ごとのセクションに分ける」と捉えた。考え方は近いが、
+正確には`on`の中に複数のeventを列挙する。設定がなければ配列の短縮形、eventごとにfilterを
+設定する場合はmapping形式を使う。
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+```
+
+この例の`push`、`pull_request`、`workflow_dispatch`は別々のWorkflowではなく、同じWorkflowを
+開始できる3種類のeventである。
+
+### 2026-09-21: Workflowファイル名を検討
+
+Chapter 01用にどのファイル名がよいかを検討した。今回は新しいWorkflowを追加するのではなく、
+Chapter 00で作った同じWorkflowのTriggerを変更するため、`.github/workflows/hello-world.yml`を
+そのまま使う。
+
+`.github/workflows/`内のファイル名は管理者が用途に合わせて決められる。Actions画面へ表示される
+Workflow名はファイル名ではなくYAML内の`name`で決まる。実務では、例えばCIなら`ci.yml`、
+deployなら`deploy.yml`のように役割で分けると読みやすい。
+
+学習章ごとにWorkflowファイルを追加すると、過去のWorkflowも`push`へ反応し、同じpushで複数の
+runが起動する。その違いを学ぶ目的がない限り、今回はファイルを増やさない。
+
+### 2026-09-21: 3つのeventとbranch filterを設定
+
+既存の`hello-world.yml`へ次のTriggerを設定した。
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+```
+
+配列の短縮形ではなくmapping形式を使い、`push`と`pull_request`へそれぞれ`main`のbranch
+filterを設定した。`workflow_dispatch`は追加設定がないため、値が空でも有効である。
+
+この設定をpushする前に、現在の`lesson/01-triggers`へのpushでrunが作られるかを予想する。
+
+予想は「`main`を指定しているため、作業branchへのpushでも`main`向けPRでも起動しない」だった。
+正しくは次のようになる。
+
+- `push.branches`: pushされたbranchを判定する。`lesson/01-triggers`へのpushは`main`ではないため起動しない
+- `pull_request.branches`: PRの取り込み先であるbase branchを判定する。`main`向けPRなので起動する
+
+同じ`branches: [main]`でも、eventによって比較対象が異なる点に注意する。
+
+`workflow_dispatch`はpushやPRで自動起動する条件ではなく、手動起動を許可するeventである。
+GitHub UIに`Run workflow`ボタンを表示するには、`workflow_dispatch`を含むWorkflowファイルが
+default branchに存在する必要がある。そのため、この変更を`main`へmergeする前はUIからの手動
+実行をまだ試せない。
+
 ## 試したことと結果
 
 壁打ちと実装の進行に合わせて追記する。

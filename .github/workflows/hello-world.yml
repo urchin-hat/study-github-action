@@ -1,7 +1,13 @@
 name: "chap1"
 
-on: "push"
-
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 jobs:
   hello:
     runs-on: "ubuntu-latest"
