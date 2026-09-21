@@ -156,20 +156,17 @@ artifactとlogの標準保持期間は90日です。この教材ではartifact�
 
 ## 1日の予定
 
-| 時間 | セクション | 学ぶ内容 |
-| --- | --- | --- |
-| 09:00–09:30 | 00: Hello World | 最小workflowとActions画面 |
-| 09:30–10:20 | 01: Trigger | push、Pull Request、手動実行 |
-| 10:20–10:30 | 休憩 |  |
-| 10:30–11:20 | 02: Contextと変数 | expressions、context、`env` |
-| 11:20–12:10 | 03: Job設計 | 並列実行、`needs`、条件分岐 |
-| 12:10–13:10 | 昼休憩 |  |
-| 13:10–14:30 | 04: サンプルアプリCI | lint、test、build、matrix |
-| 14:30–15:20 | 05: データの受け渡し | cacheとartifact |
-| 15:20–15:30 | 休憩 |  |
-| 15:30–16:20 | 06: セキュリティ | permissions、secrets、安全な入力 |
-| 16:20–17:10 | 07: Deploy設計 | Environment、concurrency、手動deploy |
-| 17:10–17:30 | 振り返り | 障害調査と理解度確認 |
+| セクション | 学ぶ内容 |
+| --- | --- |
+| 00: Hello World | 最小workflowとActions画面 |
+| 01: Trigger | push、Pull Request、手動実行 |
+| 02: Contextと変数 | expressions、context、`env` |
+| 03: Job設計 | 並列実行、`needs`、条件分岐 |
+| 04: サンプルアプリCI | lint、test、build、matrix |
+| 05: データの受け渡し | cacheとartifact |
+| 06: セキュリティ | permissions、secrets、安全な入力 |
+| 07: Deploy設計 | Environment、concurrency、手動deploy |
+| 振り返り | 障害調査と理解度確認 |
 
 ## 00: Hello World
 
