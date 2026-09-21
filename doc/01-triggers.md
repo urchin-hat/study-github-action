@@ -155,6 +155,41 @@ run: |
 一方、stepはHello Worldを表示しなくなったため、表示名`Hello, World`と実際の処理が一致しなく
 なった。Actionsのログから役割を判断できるよう、step名も処理内容に合わせて変更する。
 
+step名を`Show event context`へ変更し、`lesson/01-triggers`へpushした。このpushでもbranch
+filterに一致しないため、runは0件だった。
+
+続いて`main`向けのDraft PR
+[#14](https://github.com/urchin-hat/study-github-action/pull/14)を作成した。今度は
+`pull_request.branches: [main]`に一致し、workflow run
+[35593789056](https://github.com/urchin-hat/study-github-action/actions/runs/35593789056)が成功した。
+
+ログの値は次のとおりだった。
+
+```text
+event: pull_request
+branch: refs/pull/14/merge
+```
+
+`github.ref`は作業branchの`lesson/01-triggers`ではなく、GitHubがPRの変更をbase branchへmerge
+した状態を検証するために用意する`refs/pull/14/merge`を指した。Pull Requestでsource branch名を
+参照したい場合は`github.head_ref`、取り込み先は`github.base_ref`を使う。
+
+### 2026-09-21: Path filterを追加
+
+最初に、`push`と`pull_request`のそれぞれへ次のfilterを追加した。
+
+```yaml
+paths:
+  - "hello-world.yml"
+```
+
+`paths`を置く階層は正しい。一方、path patternはrepository rootからの相対pathとして評価される。
+このpatternが表すのはroot直下の`hello-world.yml`であり、実際の
+`.github/workflows/hello-world.yml`には一致しない。
+
+`.github/workflows/`配下全体を対象にする場合は、directoryをまたいで一致するglobの`**`を使い、
+`.github/workflows/**`と指定する。
+
 ## 試したことと結果
 
 壁打ちと実装の進行に合わせて追記する。
