@@ -42,14 +42,75 @@ GitLab CI/CDのstageに相当するものは、この章ではまだ扱いませ
 学習はセクションごとにbranchとPRを分ける。Chapter 00は最新の`main`から作成した
 `lesson/00-hello-world`で進める。
 
+### 2026-09-21: 最小構成のキーを予想
+
+最初の予想:
+
+1. pushの指定は`on`
+2. Runnerの指定は`run-on`
+3. `echo` commandを書く場所は`run`
+
+1と3は正解。2も役割の理解は合っているが、正しいキー名は複数形の`runs-on`だった。
+`run`はstepが実行するcommandを表し、`runs-on`はjobを実行するRunnerを表す。
+
+`runs-on`はstepではなくjobに設定する。同じjob内のstepは、そこで選ばれた同じRunner上で
+上から順番に実行されるためである。
+
+### 2026-09-21: 編集用のworkflowを作成
+
+`.github/workflows/hello-world.yml`に値が空の骨組みを作成した。`name`、`on`、`jobs`は
+同じトップレベルのキーであるため、同じ深さに揃えた。ここから値を1つずつ埋める。
+
+### 2026-09-21: 最初のYAMLを記述
+
+最初に次の値を選んだ。
+
+- workflow名: `chap1`
+- event: `push`
+- Runner: `ubuntu-latest`
+- command: `echo "hello,world"`
+
+workflow、event、Runner、commandの置き場所は合っていた。一方、`name:"chap1"`のように
+コロンの直後へ値を書いており、YAMLのkey/valueとして解釈させるために必要な空白がなかった。
+`name: "chap1"`または`name: chap1`のように、コロンの後へ空白を入れる必要がある。
+
+また、stepの`name`が空だった。step名は処理自体には使われない表示用の名前だが、Actionsの
+実行ログを読みやすくするために具体的な名前を付ける。
+
+### 2026-09-21: YAMLを修正
+
+コロン後の空白を追加し、step名を`Hello, World`にした。完成した最小workflowは次の構造に
+なった。
+
+- workflowの表示名: `chap1`
+- 起動event: `push`
+- job ID: `hello`
+- Runner: `ubuntu-latest`
+- stepの表示名: `Hello, World`
+- 実行command: `echo "hello,world"`
+
+すべての値を引用符で囲んでいるが、この書き方は有効である。単純な文字列では引用符を省略
+する書き方もできるため、今後は可読性を見ながら使い分ける。
+
+### 2026-09-21: checkoutなしの実行結果を予想
+
+実行前の予想は「repositoryをcheckoutしていないため成功しない」だった。
+
+今回のcommandはRunnerに最初から存在するshellの`echo`だけを使い、repository内のファイルを
+参照しない。そのため、checkoutしていなくても実行できるはずである。GitHub Actionsでは
+Runnerの準備とrepositoryのcheckoutは別の処理であり、checkoutが必要なのはソースコードや
+repository内のscriptを利用するときである。
+
+この予想の違いを、実際にpushして確認する。
+
 ## 実装前の予想
 
 workflowを書く前に、次の問いへの予想を記録する。
 
 - [ ] workflowファイルはrepository内のどこへ置くか
-- [ ] pushされたことをYAMLのどの項目で指定するか
-- [ ] jobを動かすOSをどこで指定するか
-- [ ] `Hello, world!`を実行するcommandをどこへ書くか
+- [x] pushされたことをYAMLのどの項目で指定するか: `on`
+- [x] jobを動かすOSをどこで指定するか: jobの`runs-on`
+- [x] `Hello, world!`を実行するcommandをどこへ書くか: stepの`run`
 - [ ] repositoryのcheckoutなしで`echo`を実行できるか
 
 ## 試したことと結果
@@ -58,7 +119,8 @@ workflowを書く前に、次の問いへの予想を記録する。
 
 ## つまずいた点
 
-壁打ちと実装の進行に合わせて追記する。
+- YAMLではmappingのコロンと値の間に空白が必要
+- workflowの`name`とstepの`name`は別のもので、Actions画面では異なる階層に表示される
 
 ## ブログへ残したい要点
 
