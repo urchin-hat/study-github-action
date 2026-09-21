@@ -185,6 +185,54 @@ Workflow、Job、Stepが外側から内側へ並ぶ理解は合っていた。�
 割り当てられる。今回の構成は`chap1` Workflowの中に`hello` Jobがあり、そのJobがUbuntu
 Runner上で`Hello, World` Stepを実行する、という関係になる。
 
+## 補足: Slackで成功・失敗を検知する
+
+方法は大きく2つある。
+
+### GitHubのSlack Appで購読する
+
+通知を見ることが目的なら最も簡単な方法。Slack workspaceへGitHub Appを導入し、通知先の
+channelで次のように購読する。
+
+```text
+/github subscribe urchin-hat/study-github-action workflows:{name:"chap1" event:"push"}
+```
+
+workflowの開始時に通知され、完了すると同じthreadが成功または失敗の結果で更新される。
+name、event、branch、actorでfilterできる。workflowへ通知stepやSlack credentialを追加せずに
+済むため、単純な監視ではこの方法から検討する。
+
+公式資料: [Customizing notifications for GitHub in Slack](https://docs.github.com/en/integrations/how-tos/slack/customize-notifications)
+
+### WorkflowからSlackへ送信する
+
+通知文面、mention、送信条件を細かく制御したい場合は、Slack Incoming Webhookなどを使う。
+Webhook URLはrepository secretの`SLACK_WEBHOOK_URL`へ保存し、YAMLへ直接書かない。
+
+複数jobの最終結果を通知する場合の概念的な構成は次のようになる。
+
+```yaml
+notify:
+  needs: [hello]
+  if: ${{ always() }}
+  runs-on: ubuntu-latest
+  steps:
+    - name: Notify Slack
+      uses: slackapi/slack-github-action@<FULL_COMMIT_SHA>
+      with:
+        webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "chap1: ${{ needs.hello.result }}"
+```
+
+通常、失敗したjobに依存する後続jobはskipされる。通知jobへ`if: ${{ always() }}`を付けることで、
+前段が失敗しても通知を試行できる。通知job自身の`job.status`ではなく、
+`needs.hello.result`で前段jobの結果を参照する点にも注意する。
+
+第三者Actionはtagだけでなく完全なcommit SHAへ固定すると、参照先を書き換えられるリスクを
+下げられる。実装する場合はSecurityの章でsecret、permissions、Actionの固定方法と合わせて扱う。
+
 ## つまずいた点
 
 - YAMLではmappingのコロンと値の間に空白が必要
