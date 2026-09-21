@@ -190,6 +190,16 @@ paths:
 `.github/workflows/`配下全体を対象にする場合は、directoryをまたいで一致するglobの`**`を使い、
 `.github/workflows/**`と指定する。
 
+patternを`.github/workflows/**`へ修正してpushした。Draft PR #14の差分には
+`.github/workflows/hello-world.yml`が含まれ、base branchも`main`なので、branchとpathの両方の
+条件に一致した。workflow run
+[35594301261](https://github.com/urchin-hat/study-github-action/actions/runs/35594301261)が
+`pull_request` eventで作成され、successになった。
+
+Pull Requestのpath filterは最新commitだけではなくPR全体の変更ファイルで判定される。このPRへ
+今後docsだけのcommitを追加しても、PR全体にはworkflowファイルの変更が残るためrunは起動する。
+path不一致は、この設定を`main`へmergeした後、docsだけを変更する別PRで確認する。
+
 ## 試したことと結果
 
 壁打ちと実装の進行に合わせて追記する。
