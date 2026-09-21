@@ -72,6 +72,21 @@ planごとの無料枠を消費し、超過分が課金されます。self-hoste
 
 Larger Runnerはpublic repositoryでも常に有料で、planの無料minutesを利用できません。
 
+この学習リポジトリ`urchin-hat/study-github-action`はpublicです。そのため、
+`ubuntu-latest`などstandard GitHub-hosted Runnerの実行minutesは無料です。ただし、
+artifactなどのstorage、Larger Runner、外部サービスやself-hosted Runnerのインフラ費用まで
+すべて無料になるという意味ではありません。
+
+| RepositoryとRunner | 実行minutesの扱い |
+| --- | --- |
+| Public + standard GitHub-hosted Runner | 無料 |
+| Private + standard GitHub-hosted Runner | planの無料枠を消費し、超過分は有料 |
+| Public/Private + Larger Runner | 常に有料。無料minutesは利用不可 |
+| Public/Private + self-hosted Runner | GitHub Actionsの実行料金は無料。Runnerの運用費は自己負担 |
+
+public repositoryではソースコード、workflow、実行ログも公開されます。料金面では学習しやすい
+一方で、credential、個人情報、非公開URLなどをcommitやログへ出さないことが前提です。
+
 ### Planごとの無料枠
 
 | Plan | private repositoryの実行時間/月 | Artifact storage | Cache storage |
