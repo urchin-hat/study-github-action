@@ -147,6 +147,19 @@ block scalarである`|`を使う。
 whitespaceとして検出された。workflowの意味とは直接関係しない空白でも、レビュー時の不要な
 差分やlintエラーを避けるため削除する。
 
+workflow run
+[35586273665](https://github.com/urchin-hat/study-github-action/actions/runs/35586273665)で
+意図的な失敗を実行した。結果は予想どおりfailureになり、ログには次の順序で表示された。
+
+```text
+Run echo "hello,world"
+hello,world
+Error: Process completed with exit code 1.
+```
+
+`echo`が成功しても、その後の`exit 1`が非0を返したためstep全体が失敗した。必須stepの失敗は
+jobの失敗となり、このworkflowにはjobが1つだけなのでworkflow全体も失敗した。
+
 ## つまずいた点
 
 - YAMLではmappingのコロンと値の間に空白が必要
