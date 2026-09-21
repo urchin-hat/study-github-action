@@ -160,6 +160,31 @@ Error: Process completed with exit code 1.
 `echo`が成功しても、その後の`exit 1`が非0を返したためstep全体が失敗した。必須stepの失敗は
 jobの失敗となり、このworkflowにはjobが1つだけなのでworkflow全体も失敗した。
 
+その後`exit 1`を削除して再度pushし、workflow run
+[35586441031](https://github.com/urchin-hat/study-github-action/actions/runs/35586441031)が
+successへ戻ることを確認した。失敗原因をログで特定し、その原因だけを修正して成功状態へ戻す
+一連の流れを体験できた。
+
+### 2026-09-21: 実行単位を自分の言葉で整理
+
+学習後、4つの用語を次のように説明した。
+
+1. Workflow: プロセスの基本単位
+2. Job: Workflow内の処理
+3. Runner: Workflowを動かすOS
+4. Step: 各プロセスの単位
+
+Workflow、Job、Stepが外側から内側へ並ぶ理解は合っていた。より正確には次のように整理できる。
+
+- Workflow: eventを契機に実行される、自動化全体の定義
+- Job: Workflowを構成し、1台のRunner上で実行される処理単位
+- Runner: Jobを実行するマシンまたは実行環境。OSそのものではない
+- Step: Job内で上から順に実行される最小の処理単位。commandまたはActionを実行する
+
+`runs-on: ubuntu-latest`はRunnerのlabelを指定しており、その条件に合うUbuntu環境がjobへ
+割り当てられる。今回の構成は`chap1` Workflowの中に`hello` Jobがあり、そのJobがUbuntu
+Runner上で`Hello, World` Stepを実行する、という関係になる。
+
 ## つまずいた点
 
 - YAMLではmappingのコロンと値の間に空白が必要
