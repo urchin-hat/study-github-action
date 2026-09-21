@@ -12,6 +12,7 @@ jobs:
   hello:
     runs-on: "ubuntu-latest"
     steps:
-      - name: "Hello, World"
+      - name: "Show event context"
         run: |
-          echo "hello,world"
+          echo "event: ${{ github.event_name }}"
+          echo "branch: ${{ github.ref }}"

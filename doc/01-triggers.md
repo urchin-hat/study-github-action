@@ -127,6 +127,34 @@ GitHub UIに`Run workflow`ボタンを表示するには、`workflow_dispatch`�
 default branchに存在する必要がある。そのため、この変更を`main`へmergeする前はUIからの手動
 実行をまだ試せない。
 
+### 2026-09-21: branch filterに一致しないpushを実行
+
+commit `3b80f6c`を`lesson/01-triggers`へpushした。`push.branches`は`main`だけを対象としている
+ため、このcommitに対するworkflow runとcheck runはどちらも0件だった。
+
+これはworkflowが起動して失敗またはskipした状態ではない。Trigger条件に一致せず、workflow
+run自体が作成されなかった状態である。Actionsの問題を調査するときは、次を区別する必要がある。
+
+- runが存在しない: `on`やfilter、workflowファイルの配置を確認する
+- run内のjobがskip: `if`や`needs`を確認する
+- jobまたはstepがfailure: 実行ログとexit codeを確認する
+
+### 2026-09-21: EventとGit refをログへ追加
+
+次の2つを表示するようにstepを変更した。
+
+```yaml
+run: |
+  echo "event: ${{ github.event_name }}"
+  echo "branch: ${{ github.ref }}"
+```
+
+依頼した`github.event_name`に加え、`github.ref`も追加した。どちらもGitHubがWorkflowを
+評価するときにexpressionを値へ置換し、その結果をshell commandへ渡す。
+
+一方、stepはHello Worldを表示しなくなったため、表示名`Hello, World`と実際の処理が一致しなく
+なった。Actionsのログから役割を判断できるよう、step名も処理内容に合わせて変更する。
+
 ## 試したことと結果
 
 壁打ちと実装の進行に合わせて追記する。
