@@ -35,8 +35,8 @@ GitLab CI/CDでは `stages: [build, test, deploy]` のようにパイプライ�
 
 ## 実装前の予想
 
-- [ ] `needs` を指定しない場合、Jobは上から順番に動くか、それとも同時に動くか？
-- [ ] GitLab CI/CDの「ステージ」のように、Jobをまとめる構文はGitHub Actionsにあるか？
+- [x] `needs` を指定しない場合、Jobは上から順番に動くか、それとも同時に動くか？: 予想は直列（上から順）。実際は同時に並列実行される。
+- [x] GitLab CI/CDの「ステージ」のように、Jobをまとめる構文はGitHub Actionsにあるか？: 予想はある。実際は存在せず、`needs` によるDAG（依存グラフ）で順序を制御する。
 - [ ] 前段Jobが失敗した場合、`needs` で依存している後続Jobはどうなるか？
 - [ ] 前段JobのStepでセットした環境変数は、`needs` で接続した別Jobへそのまま引き継がれるか？
 
@@ -46,9 +46,39 @@ GitLab CI/CDでは `stages: [build, test, deploy]` のようにパイプライ�
 
 Section 02のPR #15が`main`へmergeされたことを受け、`main`から`lesson/03-job-design`を作成した。
 
+### 2026-09-24: Jobの実行順序とステージの有無を予想
+
+1. デフォルトの実行順序:
+   - 予想: 直列で動く（YAMLの上から順）。
+   - 実際: **すべて並列（同時）で動く**。指定がなければ全Jobが同時にRunnerへ割り当てられる。
+2. ステージ（Stage）の概念:
+   - 予想: ある。
+   - 実際: **存在しない**。GitLab CI/CDのような `stages` 構文はなく、Job単位で `needs` を使って個別に依存関係を結ぶ（DAGモデル）。
+
+
 ## 試したことと結果
 
-壁打ちと実装の進行に合わせて追記する。
+### 実験1: `needs` なしの複数Job並列実行
+
+- PR: [#16](https://github.com/urchin-hat/study-github-action/pull/16)
+- Workflow Run: [36011500629](https://github.com/urchin-hat/study-github-action/actions/runs/36011500629)
+
+#### 実行結果
+- **job-a**:
+  - 開始: `14:15:48`
+  - 終了: `14:15:51`
+  - Runner Worker ID: `{106e2e9a-c8c0-4e2f-9677-be2a2895c323}` (Azure Region: westus)
+- **job-b**:
+  - 開始: `14:15:48`
+  - 終了: `14:15:51`
+  - Runner Worker ID: `{dccaba83-76b3-4c63-80b6-bf943627aec1}` (Azure Region: eastus)
+
+#### 分かったこと
+- **デフォルトは完全な並列実行**:
+  - `job-a` と `job-b` はまったく同じ秒（14:15:48）に開始された。直列（上から順）ではなく、GitHub Actionsは定義されたJobを同時にRunnerへ割り当てて並列に実行する。
+- **独立したRunner環境**:
+  - Worker IDおよびRegion（westus と eastus）が異なっており、Jobごとにまったく別の独立したマシン（Runner）が立ち上がって並列稼働していることが確認できた。
+
 
 ## つまずいた点
 
