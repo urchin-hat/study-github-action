@@ -32,8 +32,8 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 
 ## 実装前の予想
 
-- [ ] リポジトリのコードは、GitLab CI/CDのようにJob開始時に自動でRunner上にCloneされているか？それとも明示的な手順が必要か？
-- [ ] `actions/setup-go` を使う際、Goのバージョン指定はどう書くか？
+- [x] リポジトリのコードは、GitLab CI/CDのようにJob開始時に自動でRunner上にCloneされているか？それとも明示的な手順が必要か？: 予想は明示的な手順が必要（B）。GitLabと異なり `actions/checkout` を呼ばないとRunnerのワークスペースは空っぽになる。
+- [x] `ubuntu-latest` RunnerにはGoが最初から入っているか？なぜ `setup-go` を使うのか？: 予想は「デフォルトでGoは入っている（A）」。実際もデフォルトでGoやNode.js等はプリインストールされているが、実務ではバージョン固定・キャッシュ・matrix実行のために `actions/setup-go` を使うのが標準。
 - [ ] `strategy.matrix` で複数バージョンを指定した場合、各バージョンは直列で動くか？並列で動くか？
 - [ ] Matrixの1つが失敗した場合、実行中の他のMatrixジョブはどうなるか？（`fail-fast` の既定値）
 
@@ -42,9 +42,33 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 ### 2026-09-24: Chapter 04開始
 - `main` からブランチ `lesson/04-application-ci` を作成。
 
+### 2026-09-24: コードのチェックアウトとGoランタイムの有無（予想と壁打ち）
+
+1. **リポジトリのコード自動Clone**:
+   - 予想: B（自動では配置されない）。
+   - 実際: そのとおり。GitLab CI/CDではJob開始時にRunnerが自動でcloneするが、GitHub Actionsでは明示的に `actions/checkout@v4` を実行しないとコードが存在しない。
+2. **Runnerのプリインストールと `actions/setup-go` の役割**:
+   - ユーザーの鋭い指摘: 「今のubuntuってgoがデフォで入ってませんでしたっけ？」
+   - 実際: **その通りで、GitHub-hosted Runner（ubuntu-latest等）にはGo、Node.js、Pythonなどが最初から入っている！**
+   - なぜそれでも `actions/setup-go` を使うのか？
+     1. **Runnerイメージ更新によるバージョン勝手上がり防止**: `ubuntu-latest` のデフォルトバージョンが変わるとCIが突然壊れる恐れがある。
+     2. **プロジェクトのバージョン（`go.mod`等）とのピン留め**: 任意のバージョン（1.22.x等）を明示指定できる。
+     3. **内蔵キャッシュ**: `cache: true`（既定値）によりモジュールキャッシュが自動化される。
+     4. **Matrixテスト**: 後半で試す「複数Goバージョンでの並列テスト」には動的な切り替えが必要。
+
+3. **`go-version-file: 'go.mod'` の実務的メリット**:
+   - ユーザーの考察: 「`go-version-file` だけ（`go.mod` だけ）更新すればいいメリット」
+   - 実際: まさにそのとおり。YAML側にバージョン番号（`1.22`）を直接ハードコードすると、Goのバージョンアップ時に `go.mod` と `.github/workflows/ci.yml` の2箇所を更新する必要があり、バージョン乖離の事故が起きやすい。`go-version-file: 'go.mod'` にしておけば Single Source of Truth（真実の単一情報源）を保つことができる。
+
 ## 試したことと結果
 
-（実験を段階的に実施して記録していきます）
+### 実験1: `actions/checkout` と `actions/setup-go` による最小限のテストJob
+
+- PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- 目的:
+  - `actions/checkout@v4` でコードを取得する。
+  - `actions/setup-go@v5` で `go-version-file: 'go.mod'` を読み込ませてGo環境を準備する。
+  - `go test -v ./...` がGitHub Actions上で正常に実行されることを確認する。
 
 ## つまずいた点
 

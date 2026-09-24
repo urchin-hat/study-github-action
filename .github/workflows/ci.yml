@@ -1,0 +1,30 @@
+name: "CI"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: "Unit Test"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: "Check Go version"
+        run: |
+          echo "=== Go Version ==="
+          go version
+
+      - name: "Run unit tests"
+        run: go test -v ./...
