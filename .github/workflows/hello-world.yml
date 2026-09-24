@@ -1,4 +1,4 @@
-name: "chap2"
+name: "chap3"
 
 on:
   push:
@@ -12,58 +12,22 @@ on:
     paths:
       - ".github/workflows/**"
   workflow_dispatch:
-# 1. Workflowレベル（全体）
-env:
-  LEVEL: "workflow"
-  SHARED: "from-workflow"
 
 jobs:
-  scope-test:
+  job-a:
     runs-on: "ubuntu-latest"
-    # 2. Jobレベル
-    env:
-      LEVEL: "job"
-      JOB_ONLY: "from-job"
     steps:
-      - name: "Step 1: Overwrite with step-level env"
-        # 3. Stepレベル
-        env:
-          LEVEL: "step"
-          STEP_ONLY: "from-step1"
+      - name: "Run Job A"
         run: |
-          echo "=== Step 1 ==="
-          echo "LEVEL: $LEVEL"
-          echo "SHARED: $SHARED"
-          echo "JOB_ONLY: $JOB_ONLY"
-          echo "STEP_ONLY: $STEP_ONLY"
+          echo "Job A started at: $(date +'%H:%M:%S')"
+          sleep 3
+          echo "Job A finished at: $(date +'%H:%M:%S')"
 
-      - name: "Step 2: Check scope in next step"
+  job-b:
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Run Job B"
         run: |
-          echo "=== Step 2 ==="
-          echo "LEVEL: $LEVEL"
-          echo "STEP_ONLY: '$STEP_ONLY'"
-
-      - name: "Step A: Run on pull_request (omitted expression syntax)"
-        if: github.event_name == 'pull_request'
-        run: echo "This step runs because event is pull_request"
-
-      - name: "Step B: Run on push (should skip on PR)"
-        if: github.event_name == 'push'
-        run: echo "This step should be skipped"
-
-      - name: "Step C: Run with explicit expression syntax"
-        if: ${{ github.event_name == 'pull_request' }}
-        run: echo "This step also runs with explicit expression syntax"
-
-      # 危険な例: 直接展開（スクリプトインジェクション）
-      - name: "Direct expression (Vulnerable to injection)"
-        run: |
-          echo "PR Title is: ${{ github.event.pull_request.title }}"
-
-      # 安全な例: env経由で渡す（データとして隔離）
-      - name: "Safe handling via env (Protected)"
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          echo "PR Title is: $PR_TITLE"
-
+          echo "Job B started at: $(date +'%H:%M:%S')"
+          sleep 3
+          echo "Job B finished at: $(date +'%H:%M:%S')"
