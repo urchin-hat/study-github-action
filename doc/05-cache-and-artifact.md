@@ -36,8 +36,12 @@ GitLab CI/CDでは `artifacts:` と書くだけで後続ステージのJobに自
 
 ## 実装前の予想
 
-- [ ] GitLab CI/CDでは先行JobのArtifactは後続Jobに自動で展開されるが、GitHub Actionsではどうなるか？
-- [ ] CacheとArtifactの最大の違いは何か？（消えたらどうなるか？）
+- [x] GitLab CI/CDでは先行JobのArtifactは後続Jobに自動で展開されるが、GitHub Actionsではどうなるか？: 予想は自動展開（A）。実際は明示的なアクション（`actions/download-artifact@v4`）の呼び出しが必要（B）。勝手に帯域やディスクを消費しないGitHub Actionsの明示的設計によるもの。
+- [x] CacheとArtifactの最大の違いは何か？（消えたらどうなるか？）:
+  - 予想: ArtifactがX（消えても平気）、CacheがY（消えたら困る）。
+  - 実際: **実は真逆！**
+    - **Cache = X（消えてもOK・再生成可能）**: 依存ライブラリなど。容量逼迫時にGitHubが勝手に削除（eviction）するため、消えても再取得してCIが完走する（Cache Missが正常系）設計が必須。
+    - **Artifact = Y（消えたら困る・確定成果物）**: このコミットでビルドしたバイナリなど。後続デプロイやリリースに必要なため、消えると後続が動けない確定成果物。
 - [ ] Artifactのデフォルトの保存期間（保持日数）は何日か？
 
 ## 壁打ちメモ
@@ -45,9 +49,34 @@ GitLab CI/CDでは `artifacts:` と書くだけで後続ステージのJobに自
 ### 2026-09-25: Chapter 05開始
 - `main` からブランチ `lesson/05-cache-and-artifact` を作成。
 
+### 2026-09-25: ArtifactとCacheのメンタルモデル（予想と壁打ち）
+
+1. **後続Jobへの引き継ぎ**:
+   - 予想: GitLab CI/CDのように自動でダウンロード・展開される（A）。
+   - 実際: **B（明示的に `actions/download-artifact` が必要）**。
+   - `actions/checkout` と同様、GitHub Actionsでは「必要なものだけを明示的に呼び出す」というオプトイン思想が徹底されている。
+2. **CacheとArtifactの本質的な違い（消えたときの挙動）**:
+   - 予想: ArtifactがX（消えても平気）、CacheがY（消えたら困る）。
+   - 実際: **真逆** である。
+     - **Cache（高速化のための一時データ）**:
+       - あくまで「前回の結果を使い回して実行時間を短縮する」ためのもの。
+       - GitHubの容量制限（リポジトリあたり10GB）や保持期限（7日間アクセスなし）でいつでもGitHub側に勝手にパージ（削除）される運命にある。
+       - そのため、**「Cache Miss（キャッシュが存在しないこと）は日常茶飯事の正常系」** として設計しなければならない。
+     - **Artifact（パイプラインの確定成果物）**:
+       - ビルドバイナリ、テストレポート、リリース用パッケージなど。
+       - 「そのコミットでビルドされた正真正銘の成果物」であり、消えてしまったら後続のデプロイや検証は成立しない。
+       - 明示的にアップロード・ダウンロードされ、確実に保持される。
+
 ## 試したことと結果
 
-（実験を段階的に実施して記録していきます）
+### 実験1: `upload-artifact` と `download-artifact` によるバイナリの保存とJob間受け渡し
+
+- PR: [#18](https://github.com/urchin-hat/study-github-action/pull/18)
+- 目的:
+  - `build` Jobで生成したバイナリ `bin/study-server` を `actions/upload-artifact@v4` でアップロードする。
+  - 後続の `verify` Jobで `actions/download-artifact@v4` を使ってバイナリを取得する。
+  - `verify` JobにはGo環境やソースコードをチェックアウトせず、ダウンロードしたバイナリ単体を起動してHTTPリクエスト（`/health`, `/hello`）が正常に通るかを検証する。
+  - `retention-days: 1` で保持期間が設定されることを確認する。
 
 ## つまずいた点
 
