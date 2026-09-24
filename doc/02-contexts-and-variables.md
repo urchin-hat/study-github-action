@@ -62,7 +62,12 @@ Section 01のPR #14が`main`へmergeされたことを受け、`main`から`less
 
 ## つまずいた点
 
-壁打ちと実装の進行に合わせて追記する。
+- **`${{ ... }}` を文字列として書くと構文エラーになる**:
+  - `echo "=== 1. Expression展開 (${{ ... }}) ==="` と記述したところ、GitHub Actionsのパーサーが `${{ ... }}` をExpression式として評価しようとし、`(Line: 22, Col: 14): Unexpected symbol: '...'. Located at position 1 within expression: ...` で即座にエラーとなった。
+  - ワークフローファイル内でリテラルとして `${{` を出力したい場合は `${{ '${{ ... }}' }}` のようにエスケープするか、記号を避ける必要がある。
+- **構文エラーがある場合のWorkflow Runの挙動**:
+  - `push.branches: [main]` で作業ブランチへのpushが除外されている設定であっても、ワークフロー定義に構文エラーがあると、ブランチ判定以前にGitHubが即座に failure（Workflow file issue）のRunを作成する。
+
 
 ## ブログへ残したい要点
 

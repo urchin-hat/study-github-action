@@ -20,10 +20,10 @@ jobs:
         env:
           MESSAGE: "Hello from env"
         run: |
-          echo "=== 1. Expression展開 (${{ ... }}) ==="
+          echo "=== 1. Expression展開 ==="
           echo "Value: ${{ env.MESSAGE }}"
           echo "Event: ${{ github.event_name }}"
-          echo "=== 2. シェル環境変数 ($VAR) ==="
+          echo "=== 2. シェル環境変数 ==="
           echo "Value: $MESSAGE"
           echo "Event: $GITHUB_EVENT_NAME"
 
