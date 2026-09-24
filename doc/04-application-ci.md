@@ -172,6 +172,13 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 - **`needs` によるMatrix待機**:
   - 後続のJobで `needs: [test]` と指定した場合、Matrixの特定バージョンではなく「Matrixで展開されたすべてのジョブ」の完了・成功を待ってから実行されることが確認できた。
 
+### 実験4: `fail-fast` による実行中ジョブの強制キャンセル挙動
+
+- PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- 目的:
+  - `Go 1.21` を意図的に即座に失敗（`exit 1`）させ、並列実行中である `Go 1.22` と `Go 1.23` がデフォルトの `fail-fast: true` によってどのように扱われるかを確認する。
+  - 後続の `Build Binary` がスキップされることを確認する。
+
 ## つまずいた点
 
 （実験を通して記録します）
