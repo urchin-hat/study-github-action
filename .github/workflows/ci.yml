@@ -70,6 +70,14 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: "Cache Go build cache"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
+
       - name: "Build application binary"
         run: |
           go build -v -o bin/study-server .

@@ -113,6 +113,14 @@ GitLab CI/CDでは `artifacts:` と書くだけで後続ステージのJobに自
 - **保持期間（retention-days）によるストレージ保護**:
   - `retention-days: 1` を明示することで、デフォルトの90日間保持による不要なストレージ消費・課金を防ぐことができる。
 
+### 実験2: `actions/cache` によるキャッシュの保存と復元（Cache Miss と Cache Hit）
+
+- PR: [#18](https://github.com/urchin-hat/study-github-action/pull/18)
+- 目的:
+  - `build` Jobに `actions/cache@v4` を導入し、Goのビルドキャッシュ（`~/.cache/go-build`）をキャッシュ対象とする。
+  - 1回目の実行で「Cache Miss（Not Found）」となり、ジョブ終了時にキャッシュが保存（Saved）されることを確認する。
+  - 2回目の実行で「Cache Hit（Restored!）」となり、キャッシュが正しく復元されることを確認する。
+
 ## つまずいた点
 
 （実験を通して記録します）
