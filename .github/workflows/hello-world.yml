@@ -14,31 +14,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-job:
+  # エラーを許容するJob
+  flaky-job:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    continue-on-error: true
     steps:
-      - name: "Simulate test failure"
+      - name: "Simulate failure with continue-on-error"
         run: |
-          echo "Running test suite..."
-          echo "Error: 1 test failed!"
+          echo "This job has continue-on-error: true and timeout-minutes: 5"
+          echo "Simulating failure..."
           exit 1
 
-  # 1. 通常の後続Job（暗黙の if: success() なので、test-job失敗によりスキップされる）
-  deploy-job:
+  # flaky-jobに依存する通常の後続Job（スキップされずに動くはず！）
+  downstream-job:
     runs-on: "ubuntu-latest"
-    needs: [test-job]
+    needs: [flaky-job]
     steps:
-      - name: "Deploy application"
-        run: echo "Deploying to production..."
-
-  # 2. 常時実行の後続Job（if: always() なので、test-job失敗でも動く）
-  notify-job:
-    runs-on: "ubuntu-latest"
-    needs: [test-job]
-    if: always()
-    steps:
-      - name: "Send notification"
+      - name: "Run downstream job"
         run: |
-          echo "=== Notification Service ==="
-          echo "test-job result was: ${{ needs.test-job.result }}"
-          echo "Alert: Deployment was prevented because test-job failed."
+          echo "Downstream job executed successfully because flaky-job was allowed to fail!"
