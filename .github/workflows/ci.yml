@@ -147,3 +147,21 @@ jobs:
           echo "=== 2. Safe Example: Pass via Environment Variable ==="
           echo "Input was: $UNTRUSTED_INPUT"
 
+      - name: "Demonstrate vars vs secrets and masking limits"
+        env:
+          MY_VAR: ${{ vars.TEST_VAR }}
+          MY_SECRET: ${{ secrets.TEST_SECRET }}
+        run: |
+          echo "=== 1. Normal Variable (vars) ==="
+          echo "Variable value is: $MY_VAR"
+          echo ""
+
+          echo "=== 2. Secret (secrets) Automatic Masking ==="
+          echo "Secret value is: $MY_SECRET"
+          echo ""
+
+          echo "=== 3. Masking Bypass Pitfall (Base64) ==="
+          ENCODED_SECRET=$(echo -n "$MY_SECRET" | base64)
+          echo "Base64 encoded secret is: $ENCODED_SECRET"
+
+
