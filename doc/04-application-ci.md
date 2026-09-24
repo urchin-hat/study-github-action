@@ -114,10 +114,28 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 ### 実験2: `lint`, `test`, `build` のJob分離とDAG接続
 
 - PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- Workflow Run: [36016518487](https://github.com/urchin-hat/study-github-action/actions/runs/36016518487)
 - 目的:
   - CIの責務を `lint`（静的解析・フォーマット）、`test`（ユニットテスト）、`build`（バイナリ作成）の3つのJobに分離する。
   - `lint` と `test` が並列実行され、両方が成功した場合のみ `build` が実行されるDAG（`needs: [lint, test]`）を確認する。
   - 各Jobで独立して `checkout` と `setup-go` が実行される挙動を確認する。
+
+#### 実行結果
+- 各Jobのステータスと実行時間:
+  - `Lint & Format`: ✅ **success** (23秒)
+  - `Unit Test`: ✅ **success** (23秒)
+  - `Build Binary`: ✅ **success** (20秒)
+- 実行順序:
+  - `Lint & Format` と `Unit Test` が同時に並列起動して並走した。
+  - 両ジョブの完了後、`Build Binary` が起動してバイナリ `bin/study-server` が生成された。
+- アノテーション警告（キャッシュの自動挙動）:
+  - `setup-go` の内蔵キャッシュ機能により `go.sum` が探索されたが、今回は外部依存がないためスキップされた（`Restore cache failed: Dependencies file is not found in ... Supported file pattern: go.sum`）。
+
+#### 分かったこと
+- **DAGによる責務分離の実現**:
+  - `needs: [lint, test]` により、GitLab CI/CDの `stages` を使わなくても「並列フェーズ → 後続ビルド」の綺麗なパイプラインが組めた。
+- **ボイラープレートの必然性**:
+  - 各Jobごとに `actions/checkout` と `actions/setup-go` を書く必要があったが、Runner上のツールキャッシュ（`/opt/hostedtoolcache`）のおかげで、セットアップ時間はわずか数秒でオーバーヘッドは小さかった。
 
 ## つまずいた点
 
