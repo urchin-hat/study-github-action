@@ -60,15 +60,64 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
    - ユーザーの考察: 「`go-version-file` だけ（`go.mod` だけ）更新すればいいメリット」
    - 実際: まさにそのとおり。YAML側にバージョン番号（`1.22`）を直接ハードコードすると、Goのバージョンアップ時に `go.mod` と `.github/workflows/ci.yml` の2箇所を更新する必要があり、バージョン乖離の事故が起きやすい。`go-version-file: 'go.mod'` にしておけば Single Source of Truth（真実の単一情報源）を保つことができる。
 
+4. **Job分割時の `checkout` と `setup-go` の重複記述**:
+   - ユーザーの考察: 「B（全Jobで都度書く）が正解だと思うけど、理想はA（1回で引き継ぎ）がいい」
+   - 実際:
+     - 動作仕様としては **B**。Jobごとに完全に独立した新しい仮想マシンが起動するため、`lint`, `test`, `build` の全Jobで毎回 `actions/checkout` と `actions/setup-go` を書く必要がある。
+     - **なぜこのトレードオフなのか？**:
+       - メリット: Job間の依存がなく完全並列に起動できる（`lint` と `test` が互いを待たずに即時実行可能）。
+       - デメリット: YAMLに同じセットアップステップが何度も登場し、Runner起動待ちやオーバーヘッドが生じる。
+     - **実務での工夫**:
+       - `setup-go` はRunner上のローカルキャッシュ（`/opt/hostedtoolcache/`）を使うため、2回目以降のダウンロード時間はほぼゼロ（数秒）。
+       - 記述の重複を減らすには **Composite Action（複合Action）** や **Reusable Workflow** で一連の初期化を共通部品化する。
+       - 規模が小さいCIなら、あえてJobを分割せず「1つのJob内にStepとして lint -> test -> build を並べる」方がトータル実行時間が短くシンプルになる場合もある。
+
 ## 試したことと結果
 
 ### 実験1: `actions/checkout` と `actions/setup-go` による最小限のテストJob
 
 - PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- Workflow Run: [36015832080](https://github.com/urchin-hat/study-github-action/actions/runs/36015832080)
 - 目的:
   - `actions/checkout@v4` でコードを取得する。
   - `actions/setup-go@v5` で `go-version-file: 'go.mod'` を読み込ませてGo環境を準備する。
   - `go test -v ./...` がGitHub Actions上で正常に実行されることを確認する。
+
+#### 実行結果
+- 実行時間: 27秒（すべて成功 ✅）
+- `actions/setup-go` のログ:
+  - `go.mod` に記述された `go 1.22` を検知し、自動的に `go1.22.12` をセットアップ（`GOROOT='/opt/hostedtoolcache/go/1.22.12/x64'`）。
+- `go version` のログ:
+  ```text
+  === Go Version ===
+  go version go1.22.12 linux/amd64
+  ```
+- `go test -v ./...` のログ:
+  ```text
+  === RUN   TestHealthHandler
+  --- PASS: TestHealthHandler (0.00s)
+  === RUN   TestHelloHandler
+  === RUN   TestHelloHandler/default_world
+  === RUN   TestHelloHandler/custom_name
+  --- PASS: TestHelloHandler (0.00s)
+      --- PASS: TestHelloHandler/default_world (0.00s)
+      --- PASS: TestHelloHandler/custom_name (0.00s)
+  PASS
+  ok  	github.com/urchin-hat/study-github-action	0.003s
+  ```
+
+#### 分かったこと
+- `actions/checkout@v4` により、リポジトリのコードがカレントディレクトリ（`/home/runner/work/study-github-action/study-github-action`）に正しく展開された。
+- `actions/setup-go@v5` の `go-version-file: 'go.mod'` により、設定ファイルの二重管理をすることなく、コードと整合したGo環境が整った。
+- 標準ライブラリのみの構成のため、外部依存関係のダウンロード（`go mod download`）がなく高速にテストが完了した。
+
+### 実験2: `lint`, `test`, `build` のJob分離とDAG接続
+
+- PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- 目的:
+  - CIの責務を `lint`（静的解析・フォーマット）、`test`（ユニットテスト）、`build`（バイナリ作成）の3つのJobに分離する。
+  - `lint` と `test` が並列実行され、両方が成功した場合のみ `build` が実行されるDAG（`needs: [lint, test]`）を確認する。
+  - 各Jobで独立して `checkout` と `setup-go` が実行される挙動を確認する。
 
 ## つまずいた点
 
