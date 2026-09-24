@@ -12,18 +12,34 @@ on:
     paths:
       - ".github/workflows/**"
   workflow_dispatch:
+# 1. Workflowレベル（全体）
+env:
+  LEVEL: "workflow"
+  SHARED: "from-workflow"
+
 jobs:
-  compare-vars:
+  scope-test:
     runs-on: "ubuntu-latest"
+    # 2. Jobレベル
+    env:
+      LEVEL: "job"
+      JOB_ONLY: "from-job"
     steps:
-      - name: "Compare Expression vs Shell Variable"
+      - name: "Step 1: Overwrite with step-level env"
+        # 3. Stepレベル
         env:
-          MESSAGE: "Hello from env"
+          LEVEL: "step"
+          STEP_ONLY: "from-step1"
         run: |
-          echo "=== 1. Expression展開 ==="
-          echo "Value: ${{ env.MESSAGE }}"
-          echo "Event: ${{ github.event_name }}"
-          echo "=== 2. シェル環境変数 ==="
-          echo "Value: $MESSAGE"
-          echo "Event: $GITHUB_EVENT_NAME"
+          echo "=== Step 1 ==="
+          echo "LEVEL: $LEVEL"
+          echo "SHARED: $SHARED"
+          echo "JOB_ONLY: $JOB_ONLY"
+          echo "STEP_ONLY: $STEP_ONLY"
+
+      - name: "Step 2: Check scope in next step"
+        run: |
+          echo "=== Step 2 ==="
+          echo "LEVEL: $LEVEL"
+          echo "STEP_ONLY: '$STEP_ONLY'"
 
