@@ -7,6 +7,9 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: "Lint & Format"
@@ -126,3 +129,39 @@ jobs:
           # Terminate server
           kill $SERVER_PID
           echo "Verification passed successfully!"
+
+  security_injection_test:
+    name: "Security: Script Injection Test"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    steps:
+      - name: "Vulnerable handling (Direct interpolation in run)"
+        run: |
+          echo "=== 1. Vulnerable Example: Direct Interpolation ==="
+          echo "Input was: ${{ 'Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "' }}"
+
+      - name: "Safe handling (Pass via Environment Variable)"
+        env:
+          UNTRUSTED_INPUT: ${{ 'Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "' }}
+        run: |
+          echo "=== 2. Safe Example: Pass via Environment Variable ==="
+          echo "Input was: $UNTRUSTED_INPUT"
+
+      - name: "Demonstrate vars vs secrets and masking limits"
+        env:
+          MY_VAR: ${{ vars.TEST_VAR }}
+          MY_SECRET: ${{ secrets.TEST_SECRET }}
+        run: |
+          echo "=== 1. Normal Variable (vars) ==="
+          echo "Variable value is: $MY_VAR"
+          echo ""
+
+          echo "=== 2. Secret (secrets) Automatic Masking ==="
+          echo "Secret value is: $MY_SECRET"
+          echo ""
+
+          echo "=== 3. Masking Bypass Pitfall (Base64) ==="
+          ENCODED_SECRET=$(echo -n "$MY_SECRET" | base64)
+          echo "Base64 encoded secret is: $ENCODED_SECRET"
+
+
