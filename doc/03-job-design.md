@@ -37,7 +37,7 @@ GitLab CI/CDでは `stages: [build, test, deploy]` のようにパイプライ�
 
 - [x] `needs` を指定しない場合、Jobは上から順番に動くか、それとも同時に動くか？: 予想は直列（上から順）。実際は同時に並列実行される。
 - [x] GitLab CI/CDの「ステージ」のように、Jobをまとめる構文はGitHub Actionsにあるか？: 予想はある。実際は存在せず、`needs` によるDAG（依存グラフ）で順序を制御する。
-- [ ] 前段Jobが失敗した場合、`needs` で依存している後続Jobはどうなるか？
+- [x] 前段Jobが失敗した場合、`needs` で依存している後続Jobはどうなるか？: 予想はスキップ（B）。実際もスキップされる（暗黙の if: success() のため）。救済するには if: always() や if: failure() を使う。
 - [x] 前段JobのStepでセットした環境変数やファイルは、`needs` で接続した別Jobへそのまま引き継がれるか？: 予想は同じRunnerで動くため見れる。実際はJobごとに毎回新しいRunnerが割り当てられるため引き継がれない（Job OutputsやArtifactが必要）。
 
 ## 壁打ちメモ
@@ -63,6 +63,19 @@ Section 02のPR #15が`main`へmergeされたことを受け、`main`から`less
 2. データの共有（環境変数・ファイル）:
    - 予想: 同じRunnerマシンで動くため見れる。
    - 実際: **Jobごとにまったく新しいクリーンなRunnerマシンが割り当てられる**ため、ファイルも環境変数も引き継がれない。Job間でデータを渡すには `outputs`（文字列）や `artifacts`（ファイル）を明示的に使う必要がある。
+
+### 2026-09-24: 前段Job失敗時の後続Jobの挙動と救済方法を予想
+
+1. 前段Job失敗時の後続Job:
+   - 予想: B（スキップされる）。
+   - 実際: そのとおり。後続Jobは実行されずに **スキップ（skipped）** される。デフォルトで各Jobには暗黙の `if: success()` が適用されているため。
+2. 失敗時の救済・常時実行（通知など）:
+   - 予想: `needs:` とは違う表現がある？
+   - 実際: 依存関係は `needs:` のままにし、Jobレベルの **`if:`** にステータスチェック関数（`always()` や `failure()`）を指定する。
+     - `if: always()`: 前段の成否に関わらず必ず実行（GitLabの `when: always` に相当）
+     - `if: failure()`: 前段が失敗した場合のみ実行（GitLabの `when: on_failure` に相当）
+     - 前段の結果は `${{ needs.<job_id>.result }}` で取得可能（`success` / `failure` / `skipped` / `cancelled`）
+
 
 
 
@@ -121,6 +134,30 @@ Section 02のPR #15が`main`へmergeされたことを受け、`main`から`less
   - そのため、前段Jobで作成したファイルや `$GITHUB_ENV` で設定した環境変数は、後続Jobには一切引き継がれない。
 - **Job Outputs による明示的な受け渡し**:
   - Job間で文字列データを渡すには、`$GITHUB_OUTPUT` に書き込み、Job定義の `outputs:` で公開し、後続Jobから `${{ needs.<job_id>.outputs.<name> }}` で参照する必要がある。
+
+### 実験3: 前段Job失敗時のスキップ挙動と `always()` による救済
+
+- PR: [#16](https://github.com/urchin-hat/study-github-action/pull/16)
+- Workflow Run: [36012847241](https://github.com/urchin-hat/study-github-action/actions/runs/36012847241)
+
+#### 実行結果
+各Jobのステータス：
+- `test-job`: ❌ **failure**（`exit 1` により2秒で異常終了）
+- `deploy-job`: ⚪ **skipped**（実行されずスキップ）
+- `notify-job`: ✅ **success**（前段が失敗しても実行された！）
+
+`notify-job` のログ出力：
+```text
+=== Notification Service ===
+test-job result was: failure
+Alert: Deployment was prevented because test-job failed.
+```
+
+#### 分かったこと
+- **デフォルトはスキップ**: `needs: [test-job]` のみで `if:` を書かないJob（`deploy-job`）は、暗黙の `if: success()` により、前段が失敗した時点で **一切実行されずにスキップ（0秒）** される。本番デプロイなど後続を安全に止めたい場合はデフォルトのままで良い。
+- **`always()` による救済**: 通知のように前段が失敗しても動かしたいJobには `if: always()` を明示すれば、パイプラインが途中で打ち切られることなく確実に実行される。
+- **前段のステータス参照**: `${{ needs.<job_id>.result }}` で前段Jobの終了状態（`failure` など）を文字列として参照できる。
+
 
 
 ## つまずいた点
