@@ -54,14 +54,7 @@ jobs:
         run: go version
 
       - name: "Run unit tests"
-        run: |
-          if [ "${{ matrix.go-version }}" = "1.21" ]; then
-            echo "Simulating failure on Go 1.21 to test fail-fast..."
-            exit 1
-          fi
-          echo "Sleeping for 15s to observe fail-fast cancellation from Go 1.21 failure..."
-          sleep 15
-          go test -v ./...
+        run: go test -v ./...
 
   build:
     name: "Build Binary"
