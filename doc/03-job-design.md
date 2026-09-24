@@ -39,6 +39,9 @@ GitLab CI/CDでは `stages: [build, test, deploy]` のようにパイプライ�
 - [x] GitLab CI/CDの「ステージ」のように、Jobをまとめる構文はGitHub Actionsにあるか？: 予想はある。実際は存在せず、`needs` によるDAG（依存グラフ）で順序を制御する。
 - [x] 前段Jobが失敗した場合、`needs` で依存している後続Jobはどうなるか？: 予想はスキップ（B）。実際もスキップされる（暗黙の if: success() のため）。救済するには if: always() や if: failure() を使う。
 - [x] 前段JobのStepでセットした環境変数やファイルは、`needs` で接続した別Jobへそのまま引き継がれるか？: 予想は同じRunnerで動くため見れる。実際はJobごとに毎回新しいRunnerが割り当てられるため引き継がれない（Job OutputsやArtifactが必要）。
+- [x] 未指定時のタイムアウト上限は何時間か？: 予想は6時間（C）。実際も360分（6時間）。
+- [x] `continue-on-error: true` のJobが失敗した場合、ワークフロー全体はどうなるか？: 予想は成功（緑）になる。実際も後続Jobは継続し、全体も成功扱いになる。
+
 
 ## 壁打ちメモ
 
@@ -75,6 +78,23 @@ Section 02のPR #15が`main`へmergeされたことを受け、`main`から`less
      - `if: always()`: 前段の成否に関わらず必ず実行（GitLabの `when: always` に相当）
      - `if: failure()`: 前段が失敗した場合のみ実行（GitLabの `when: on_failure` に相当）
      - 前段の結果は `${{ needs.<job_id>.result }}` で取得可能（`success` / `failure` / `skipped` / `cancelled`）
+
+### 2026-09-24: ワークフローのメンタルモデル（DAGグラフとしての可読性）
+
+- ユーザーの考察:
+  - ワークフローは上から順に手続き的に実行されて途中で止まるスクリプトではない。
+  - ワークフロー全体が評価され、依存関係（`needs`）と条件（`if`）に基づいたグラフ（DAG: 有向非巡回グラフ）として各Jobが実行・スキップされる。
+  - そのため、コードを読む際も「上から下への手続き」ではなく「Job同士の結線図」として読む必要がある。
+
+### 2026-09-24: `timeout-minutes` と `continue-on-error` を予想
+
+1. タイムアウト上限（`timeout-minutes`）:
+   - 予想: C（6時間 / 360分）。
+   - 実際: そのとおり。GitHub-hosted Runnerのデフォルトタイムアウトは最大6時間。ハングしたジョブが枠を大量消費するのを防ぐため、実務では10〜30分などの明示設定が必須。
+2. エラー許容（`continue-on-error`）:
+   - 予想: ワークフロー全体は成功（緑）になる。
+   - 実際: そのとおり。GitLab CI/CDの `allow_failure: true` に相当し、Jobが失敗しても後続Jobは通常どおり実行され、ワークフロー全体も成功（Success）として完了する。
+
 
 
 
@@ -158,6 +178,27 @@ Alert: Deployment was prevented because test-job failed.
 - **`always()` による救済**: 通知のように前段が失敗しても動かしたいJobには `if: always()` を明示すれば、パイプラインが途中で打ち切られることなく確実に実行される。
 - **前段のステータス参照**: `${{ needs.<job_id>.result }}` で前段Jobの終了状態（`failure` など）を文字列として参照できる。
 
+### 実験4: `timeout-minutes` と `continue-on-error`
+
+- PR: [#16](https://github.com/urchin-hat/study-github-action/pull/16)
+- Workflow Run: [36013707798](https://github.com/urchin-hat/study-github-action/actions/runs/36013707798)
+
+#### 実行結果
+- `flaky-job`: ❌ **failure**（`exit 1` で失敗したが `continue-on-error: true` を設定）
+- `downstream-job`: ✅ **success**（`needs: [flaky-job]` のみだがスキップされずに正常実行！）
+- ワークフロー全体の結果: ✅ **success（緑のチェック）**
+
+`downstream-job` のログ出力：
+```text
+Downstream job executed successfully because flaky-job was allowed to fail!
+```
+
+#### 分かったこと
+- **`continue-on-error: true` によるエラー許容**:
+  - GitLab CI/CDの `allow_failure: true` と同等に機能し、Job自身が失敗しても後続Jobは通常通り実行される。
+  - ワークフロー全体の結果も失敗（Failure）にはならず、成功（Success）として完了する。
+- **タイムアウト設定の重要性**:
+  - デフォルトのタイムアウトは6時間（360分）と非常に長いため、ハング時のリソース・料金消費を防ぐために `timeout-minutes: 5` などの明示設定が不可欠である。
 
 
 ## つまずいた点
@@ -165,8 +206,22 @@ Alert: Deployment was prevented because test-job failed.
 - **直列接続（`needs`）でも環境は引き継がれない**:
   - `needs` で接続すれば同じ環境で継続実行されると誤解しやすいが、GitHub ActionsではJob単位で毎回クリーンな新しい仮想マシン/コンテナが起動する。
   - ファイルを共有したい場合はArtifacts、変数を共有したい場合はJob Outputsが必須となる。
+- **ステージ概念が存在しないことのギャップ**:
+  - GitLab CI/CDのように `stages` を定義して「フェーズ」で束ねるのではなく、Job個々の結線（`needs`）によるDAGモデルで設計する必要がある。
 
 
 ## ブログへ残したい要点
 
-壁打ちと実装の進行に合わせて追記する。
+- **ワークフローのメンタルモデル（手続き型ではなくDAGグラフ）**:
+  - ワークフローは上から下へ流れるスクリプトではなく、Job同士の依存関係（`needs`）と条件（`if`）を定義したグラフ（DAG: 有向非巡回グラフ）として評価される。
+  - 依存がなければすべて並列実行され、どこかが失敗してもパイプライン全体が即座に打ち切られるわけではない。
+- **直列化してもJob間は完全隔離**:
+  - `needs` で順番を作っても、Jobごとに別々のRunnerマシンが起動する。環境変数やファイルは共有されない。
+  - 文字列データの受け渡しには `$GITHUB_OUTPUT` と `outputs` を使う。
+- **後続Jobの制御**:
+  - デフォルトでは暗黙の `if: success()` により、前段がコケると後続は安全にスキップされる（デプロイ防止）。
+  - 失敗時でも動かしたい通知処理等には `if: always()` を明示し、`${{ needs.<job_id>.result }}` で前段の成否を拾う。
+- **タイムアウトとエラー許容**:
+  - デフォルトタイムアウト（6時間）の罠を避けるため、`timeout-minutes` の設定を習慣化する。
+  - 許容可能なテスト失敗には `continue-on-error: true` を活用する。
+
