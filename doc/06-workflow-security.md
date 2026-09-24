@@ -110,6 +110,50 @@
 - **ワークフローでの明示の重要性**:
   - リポジトリやOrganizationの設定に依存せず、コード側で `permissions:` を書くことで、予期せぬ強い権限が付与される事故を確実に防ぐことができる。
 
+### 実験2: スクリプトインジェクションの再現と環境変数（`env:`）による防御
+
+- PR: [#19](https://github.com/urchin-hat/study-github-action/pull/19)
+- Workflow Run: [36024864301](https://github.com/urchin-hat/study-github-action/actions/runs/36024864301)（Job: `Security: Script Injection Test`）
+- 目的:
+  - 攻撃文字列（`Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "`）を用意し、
+    1. `run:` 内に `${{ ... }}` で直接文字列展開した場合（脆弱なコード）
+    2. `env:` ブロックで環境変数として渡してシェル内で `$VAR` として参照した場合（安全なコード）
+    のログ出力を比較・検証する。
+
+#### 実行結果
+- **1. 脆弱な直接展開のログ**:
+  ```text
+  ##[group]Run echo "=== 1. Vulnerable Example: Direct Interpolation ==="
+  echo "=== 1. Vulnerable Example: Direct Interpolation ==="
+  echo "Input was: Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo ""
+  ##[endgroup]
+  === 1. Vulnerable Example: Direct Interpolation ===
+  Input was: Fix bug
+  🚨 [EXPLOIT] Injected command executed! 🚨
+  ```
+  - `${{ ... }}` がシェル起動前に文字列置換された結果、ダブルクォートが閉じられて `echo "🚨 [EXPLOIT]..."` が**独立したシェルコマンドとしてそのまま実行されてしまった**。
+- **2. 安全な環境変数経由のログ**:
+  ```text
+  ##[group]Run echo "=== 2. Safe Example: Pass via Environment Variable ==="
+  echo "=== 2. Safe Example: Pass via Environment Variable ==="
+  echo "Input was: $UNTRUSTED_INPUT"
+  env:
+    UNTRUSTED_INPUT: Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "
+  ##[endgroup]
+  === 2. Safe Example: Pass via Environment Variable ===
+  Input was: Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "
+  ```
+  - シェルに渡されたコードは `echo "Input was: $UNTRUSTED_INPUT"` のままであり、入力値はプロセス環境変数の値（メモリ上のプレーンテキスト）として安全に扱われた。
+  - セミコロンやダブルクォートがコマンドとして解釈されることは一切なく、1行の文字列として安全に出力された。
+
+#### 分かったこと
+- **`${{ ... }}` はスクリプトに直接展開してはならない（絶対ルール）**:
+  - PRのタイトル、本文、ブランチ名、コミットメッセージ、Issueのコメントなど、**外部ユーザーが自由に書き込めるコンテキストはすべて未信頼（Untrusted Input）** である。
+  - これらを `run:` のシェルスクリプト内で `${{ ... }}` として直接埋め込むと、スクリプトインジェクションによりランナーが乗っ取られる。
+- **防御は必ず `env:` を介すこと**:
+  - `env:` で一度環境変数に格納してから `$VAR`（bashの場合）で参照すれば、完全にインジェクションを防ぐことができる。
+
+
 
 ## つまずいた点
 
