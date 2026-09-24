@@ -34,8 +34,8 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 
 - [x] リポジトリのコードは、GitLab CI/CDのようにJob開始時に自動でRunner上にCloneされているか？それとも明示的な手順が必要か？: 予想は明示的な手順が必要（B）。GitLabと異なり `actions/checkout` を呼ばないとRunnerのワークスペースは空っぽになる。
 - [x] `ubuntu-latest` RunnerにはGoが最初から入っているか？なぜ `setup-go` を使うのか？: 予想は「デフォルトでGoは入っている（A）」。実際もデフォルトでGoやNode.js等はプリインストールされているが、実務ではバージョン固定・キャッシュ・matrix実行のために `actions/setup-go` を使うのが標準。
-- [ ] `strategy.matrix` で複数バージョンを指定した場合、各バージョンは直列で動くか？並列で動くか？
-- [ ] Matrixの1つが失敗した場合、実行中の他のMatrixジョブはどうなるか？（`fail-fast` の既定値）
+- [x] `strategy.matrix` で複数バージョンを指定した場合、各バージョンは直列で動くか？並列で動くか？: 予想は並列（B）。実際も各matrixの組み合わせが個別のRunnerで並列実行される。
+- [x] Matrixの1つが失敗した場合、実行中の他のMatrixジョブはどうなるか？（`fail-fast` の既定値）: 予想は「並列のためそのまま実行される（A）」。しかし実際はGitHub Actionsの既定値 `fail-fast: true` により、1つ失敗すると他ジョブが即座に自動キャンセルされる。完走させたい場合は `fail-fast: false` が必要。
 
 ## 壁打ちメモ
 
@@ -71,6 +71,16 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
        - `setup-go` はRunner上のローカルキャッシュ（`/opt/hostedtoolcache/`）を使うため、2回目以降のダウンロード時間はほぼゼロ（数秒）。
        - 記述の重複を減らすには **Composite Action（複合Action）** や **Reusable Workflow** で一連の初期化を共通部品化する。
        - 規模が小さいCIなら、あえてJobを分割せず「1つのJob内にStepとして lint -> test -> build を並べる」方がトータル実行時間が短くシンプルになる場合もある。
+
+5. **Matrix実行と `fail-fast` の設計思想**:
+   - ユーザーの考察: 「Q1は並列（B）、Q2は並列で別マシンで動いているため最後まで実行される（A）」
+   - 実際:
+     - **Q1（並列実行）は大正解（B）**: `matrix` に指定したバージョンごとに別々のRunnerが割り当てられ、一斉に並列稼働する。
+     - **Q2（失敗時の挙動）は実はB（即座に他ジョブもキャンセルされる）**:
+       - GitLab CI/CD（最後まで走る）との最大のギャップ。
+       - GitHub Actionsでは **`fail-fast: true` がデフォルト**。
+       - 「マトリックスの1つが落ちた時点で全体のステータスは失敗になるため、Runner枠や課金時間を節約するために、他の実行中・待機中Matrixジョブも即座に強制終了する」というリソース節約思想によるもの。
+       - 全バージョンの成否結果を一覧で確認したい場合は、明示的に **`strategy.fail-fast: false`** を書く必要がある。
 
 ## 試したことと結果
 
@@ -136,6 +146,13 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
   - `needs: [lint, test]` により、GitLab CI/CDの `stages` を使わなくても「並列フェーズ → 後続ビルド」の綺麗なパイプラインが組めた。
 - **ボイラープレートの必然性**:
   - 各Jobごとに `actions/checkout` と `actions/setup-go` を書く必要があったが、Runner上のツールキャッシュ（`/opt/hostedtoolcache`）のおかげで、セットアップ時間はわずか数秒でオーバーヘッドは小さかった。
+
+### 実験3: `strategy.matrix` による複数Goバージョンの並列テスト
+
+- PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- 目的:
+  - `strategy.matrix` で `go-version: ["1.21", "1.22", "1.23"]` を指定し、3バージョンのテストが別々のRunnerで並列実行されることを確認する。
+  - 後続の `build` Job（`needs: [lint, test]`）が、3つのMatrixテストすべてが完了・成功するまで待機してから起動することを確認する。
 
 ## つまずいた点
 
