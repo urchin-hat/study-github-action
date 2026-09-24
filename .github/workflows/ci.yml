@@ -70,7 +70,59 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: "Cache Go build cache"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
+
       - name: "Build application binary"
         run: |
           go build -v -o bin/study-server .
           ls -lh bin/study-server
+
+      - name: "Upload build binary as artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-server-binary
+          path: bin/study-server
+          retention-days: 1
+
+  verify:
+    name: "Verify Artifact"
+    runs-on: "ubuntu-latest"
+    needs: [build]
+    timeout-minutes: 5
+    steps:
+      - name: "Download build binary from artifact"
+        uses: actions/download-artifact@v4
+        with:
+          name: study-server-binary
+          path: bin/
+
+      - name: "Verify downloaded binary and run health check"
+        run: |
+          echo "=== Check downloaded files ==="
+          ls -la bin/
+
+          echo "=== Add execute permission and run binary ==="
+          chmod +x bin/study-server
+          bin/study-server &
+          SERVER_PID=$!
+
+          # Wait for server to start
+          sleep 2
+
+          echo "=== Test /health endpoint ==="
+          curl -s -i http://localhost:8080/health
+          echo ""
+
+          echo "=== Test /hello endpoint ==="
+          curl -s -i "http://localhost:8080/hello?name=GitHubActions"
+          echo ""
+
+          # Terminate server
+          kill $SERVER_PID
+          echo "Verification passed successfully!"
