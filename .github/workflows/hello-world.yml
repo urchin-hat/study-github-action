@@ -55,3 +55,15 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: echo "This step also runs with explicit expression syntax"
 
+      # 危険な例: 直接展開（スクリプトインジェクション）
+      - name: "Direct expression (Vulnerable to injection)"
+        run: |
+          echo "PR Title is: ${{ github.event.pull_request.title }}"
+
+      # 安全な例: env経由で渡す（データとして隔離）
+      - name: "Safe handling via env (Protected)"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "PR Title is: $PR_TITLE"
+
