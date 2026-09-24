@@ -1,4 +1,4 @@
-name: "chap1"
+name: "chap2"
 
 on:
   push:
@@ -13,10 +13,17 @@ on:
       - ".github/workflows/**"
   workflow_dispatch:
 jobs:
-  hello:
+  compare-vars:
     runs-on: "ubuntu-latest"
     steps:
-      - name: "Show event context"
+      - name: "Compare Expression vs Shell Variable"
+        env:
+          MESSAGE: "Hello from env"
         run: |
-          echo "event: ${{ github.event_name }}"
-          echo "branch: ${{ github.ref }}"
+          echo "=== 1. Expression展開 (${{ ... }}) ==="
+          echo "Value: ${{ env.MESSAGE }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "=== 2. シェル環境変数 ($VAR) ==="
+          echo "Value: $MESSAGE"
+          echo "Event: $GITHUB_EVENT_NAME"
+
