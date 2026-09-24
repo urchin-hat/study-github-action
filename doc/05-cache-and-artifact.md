@@ -72,11 +72,46 @@ GitLab CI/CDでは `artifacts:` と書くだけで後続ステージのJobに自
 ### 実験1: `upload-artifact` と `download-artifact` によるバイナリの保存とJob間受け渡し
 
 - PR: [#18](https://github.com/urchin-hat/study-github-action/pull/18)
+- Workflow Run: [36021645589](https://github.com/urchin-hat/study-github-action/actions/runs/36021645589)
 - 目的:
   - `build` Jobで生成したバイナリ `bin/study-server` を `actions/upload-artifact@v4` でアップロードする。
   - 後続の `verify` Jobで `actions/download-artifact@v4` を使ってバイナリを取得する。
   - `verify` JobにはGo環境やソースコードをチェックアウトせず、ダウンロードしたバイナリ単体を起動してHTTPリクエスト（`/health`, `/hello`）が正常に通るかを検証する。
   - `retention-days: 1` で保持期間が設定されることを確認する。
+
+#### 実行結果
+- 各Jobのステータス:
+  - `Build Binary`: ✅ **success** (22秒) — バイナリをビルドし、`upload-artifact` でアップロード完了（ZIP圧縮後 4.2MB）。
+  - `Verify Artifact`: ✅ **success** (7秒) — `download-artifact` で取得し、バイナリを起動してヘルスチェック成功！
+- Web UI / CLIの確認:
+  - Runの成果物一覧に `study-server-binary` が登録され、ZIPとしてダウンロード可能になった。
+- `Verify Artifact` Jobのログ出力:
+  ```text
+  === Check downloaded files ===
+  -rw-r--r-- 1 runner runner 7306544 Sep 24 15:39 study-server
+
+  === Add execute permission and run binary ===
+  2026/09/24 15:39:39 Starting server on :8080
+
+  === Test /health endpoint ===
+  HTTP/1.1 200 OK
+  Content-Type: application/json
+  {"status":"ok"}
+
+  === Test /hello endpoint ===
+  HTTP/1.1 200 OK
+  Hello, GitHubActions!
+  Verification passed successfully!
+  ```
+
+#### 分かったこと
+- **Job間の確実な成果物受け渡し**:
+  - `verify` Jobには `actions/checkout` も `actions/setup-go` も書かず、完全な素のUbuntu環境でバイナリ単体をダウンロードして動かすことができた。デプロイジョブと同じ挙動を完璧に再現できた。
+- **実行権限（パーミッション）の落とし穴**:
+  - `download-artifact` でダウンロードしたバイナリのパーミッションは `-rw-r--r--`（実行権限なし）になっていた。
+  - アーティファクトは内部的にZIPで転送・保存されるため、実行権限（`+x`）が落ちる場合がある。実務でバイナリを扱う際は `chmod +x` を呼ぶ必要がある。
+- **保持期間（retention-days）によるストレージ保護**:
+  - `retention-days: 1` を明示することで、デフォルトの90日間保持による不要なストレージ消費・課金を防ぐことができる。
 
 ## つまずいた点
 
