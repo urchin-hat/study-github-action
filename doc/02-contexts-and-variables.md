@@ -131,6 +131,24 @@ STEP_ONLY: ''
   - 外側のスコープ（WorkflowやJob）で定義された変数は、内側のStepへ引き継がれる（`SHARED`、`JOB_ONLY` がStep 1 で参照可能）。
   - Stepレベルで定義された `env`（`STEP_ONLY` や Step 1 の `LEVEL=step`）は、**そのStepのプロセス内でのみ有効**であり、後続のStep 2 では `STEP_ONLY` は空になり、`LEVEL` もJobレベルの `job` に戻る。
 
+### 実験3: `if` 条件式によるStep実行制御とExpression記法
+
+- PR: [#15](https://github.com/urchin-hat/study-github-action/pull/15)
+- Workflow Run: [35973428074](https://github.com/urchin-hat/study-github-action/actions/runs/35973428074)
+
+実行結果：
+- **Step A (`if: github.event_name == 'pull_request'` / 省略記法)**:
+  - 実行された（`This step runs because event is pull_request`）
+- **Step B (`if: github.event_name == 'push'` / 条件不一致)**:
+  - **スキップされた**（ログ自体が生成されず、ステップが実行されなかった）
+- **Step C (`if: ${{ github.event_name == 'pull_request' }}` / 明示的Expression記法)**:
+  - 実行された（`This step also runs with explicit expression syntax`）
+
+#### 分かったこと
+- `if:` 条件式では、`${{ ... }}` を省略しても明示しても同様に評価されるが、省略記法がシンプルで推奨される。
+- 条件式が `false` と評価されたStepは安全にスキップされる。
+
+
 
 
 ## つまずいた点
