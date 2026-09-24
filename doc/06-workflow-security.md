@@ -40,7 +40,9 @@
 
 ## 実装前の予想
 
-- [ ] `permissions` をトップレベルで宣言しない場合、`GITHUB_TOKEN` にはどのような権限が与えられているか？
+- [x] `permissions` をトップレベルで宣言しない場合、`GITHUB_TOKEN` にはどのような権限が与えられているか？:
+  - 予想: C（デフォルトでは権限なし / None で、明示的に指定しないと動かない）。
+  - 実際: **B（リポジトリやOrganizationの設定次第で、読み書き両方 / Read & Write が全開放されている可能性がある）**。
 - [ ] `${{ github.event.pull_request.title }}` を `run: echo "${{ ... }}"` に直接書くと、どのような攻撃（インジェクション）が可能になるか？
 - [ ] `pull_request` と `pull_request_target` で `secrets` や `GITHUB_TOKEN` の権限はどう違うか？
 
@@ -49,7 +51,51 @@
 ### 2026-09-25: Chapter 06開始
 - `main` からブランチ `lesson/06-security` を作成。
 
+### 2026-09-25: GITHUB_TOKEN のデフォルト権限の罠（予想と壁打ち）
+- 予想: 何も権限がない（C）と思いがち。
+- 実際: 歴史的経緯から、リポジトリやOrganizationの設定によって **「Read and write permissions（読み書きフル権限）」がデフォルトになっているケースが非常に多い（B）**。
+- **リスク**:
+  - フル権限のままだと、悪意のあるサードパーティActionを取り込んだ際や、スクリプトインジェクションが発生した際に、`GITHUB_TOKEN` を使ってリポジトリのコードを直接書き換えられたり、悪意のあるReleaseを公開されたりするリスクがある。
+- **対策（最小権限の原則 / Principle of Least Privilege）**:
+  - ワークフローファイルで `permissions:` を明示すると、**リポジトリ側の設定を上書きし、指定した権限以外はすべて「None（権限なし）」に強制剥奪** される。
+  - 例: `contents: read` だけを指定すれば、コードのチェックアウトだけが許可され、それ以外の書き込み権限はすべて遮断される。
+
+
 ## 試したことと結果
+
+### 実験1: `permissions: contents: read` による最小権限化の確認
+
+- PR: [#19](https://github.com/urchin-hat/study-github-action/pull/19)
+- Workflow Run: [36024262344](https://github.com/urchin-hat/study-github-action/actions/runs/36024262344)
+- 目的:
+  - ワークフローのトップレベルに `permissions: contents: read` を宣言し、CI（Checkout、Test、Build、Artifact受け渡し）が正常に完走することを確認する。
+  - ジョブ開始時の `Set up job` ステップのログで、付与された `GITHUB_TOKEN Permissions` を確認する。
+
+#### 実行結果
+- 各ジョブのステータス: ✅ **All checks passed (6/6 success)**
+- `Set up job` 内の `GITHUB_TOKEN Permissions` ログ比較:
+  - **変更前（未指定時: Run 36023411659）**:
+    ```text
+    GITHUB_TOKEN Permissions
+    Contents: read
+    Metadata: read
+    Packages: read
+    ```
+    ※リポジトリのデフォルト設定に従い、`Packages: read` なども付与されていた。
+  - **変更後（`permissions: contents: read` 明示時: Run 36024262344）**:
+    ```text
+    GITHUB_TOKEN Permissions
+    Contents: read
+    Metadata: read
+    ```
+    ※明示した `Contents: read` と最小限必要な `Metadata: read` 以外、すべての権限（Packages, Issues, Pull Requests, Deployments等）が剥奪され、最小権限化が確認できた。
+
+#### 分かったこと
+- **ログの可視性**:
+  - `GITHUB_TOKEN` にどのような権限が付与されているかは、各Jobの最初のステップ `Set up job` のログにある `GITHUB_TOKEN Permissions` グループでいつでも確認できる。
+- **ワークフローでの明示の重要性**:
+  - リポジトリやOrganizationの設定に依存せず、コード側で `permissions:` を書くことで、予期せぬ強い権限が付与される事故を確実に防ぐことができる。
+
 
 ## つまずいた点
 
