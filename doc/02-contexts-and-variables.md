@@ -58,7 +58,37 @@ Section 01のPR #14が`main`へmergeされたことを受け、`main`から`less
 
 ## 試したことと結果
 
-壁打ちと実装の進行に合わせて追記する。
+### 実験1: Expression展開とシェル環境変数の比較
+
+- PR: [#15](https://github.com/urchin-hat/study-github-action/pull/15)
+- Workflow Run: [35972524271](https://github.com/urchin-hat/study-github-action/actions/runs/35972524271)
+
+実行ログのコマンド展開部分：
+```text
+Run echo "=== 1. Expression展開 ==="
+echo "=== 1. Expression展開 ==="
+echo "Value: Hello from env"
+echo "Event: pull_request"
+echo "=== 2. シェル環境変数 ==="
+echo "Value: $MESSAGE"
+echo "Event: $GITHUB_EVENT_NAME"
+```
+
+実行出力結果：
+```text
+=== 1. Expression展開 ===
+Value: Hello from env
+Event: pull_request
+=== 2. シェル環境変数 ===
+Value: Hello from env
+Event: pull_request
+```
+
+#### 分かったこと
+- 予想どおり、**Expression（`${{ ... }}`）はRunnerがシェルを起動する前に値へ文字列置換される**ため、シェルに渡されるコマンド自体が `echo "Value: Hello from env"` に書き換わっていた。
+- 一方、**シェル環境変数（`$MESSAGE` や `$GITHUB_EVENT_NAME`）はシェルに `$VAR` のまま渡り、実行時にシェル自身が環境変数テーブルを参照して展開**していた。
+- 最終的な出力文字列は同じだが、シェルに渡る「コードそのもの」が異なっていることが確認できた。
+
 
 ## つまずいた点
 
