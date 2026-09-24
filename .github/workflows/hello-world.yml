@@ -43,3 +43,15 @@ jobs:
           echo "LEVEL: $LEVEL"
           echo "STEP_ONLY: '$STEP_ONLY'"
 
+      - name: "Step A: Run on pull_request (omitted expression syntax)"
+        if: github.event_name == 'pull_request'
+        run: echo "This step runs because event is pull_request"
+
+      - name: "Step B: Run on push (should skip on PR)"
+        if: github.event_name == 'push'
+        run: echo "This step should be skipped"
+
+      - name: "Step C: Run with explicit expression syntax"
+        if: ${{ github.event_name == 'pull_request' }}
+        run: echo "This step also runs with explicit expression syntax"
+
