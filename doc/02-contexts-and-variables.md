@@ -97,6 +97,31 @@ Event: pull_request
 - 一方、**シェル環境変数（`$MESSAGE` や `$GITHUB_EVENT_NAME`）はシェルに `$VAR` のまま渡り、実行時にシェル自身が環境変数テーブルを参照して展開**していた。
 - 最終的な出力文字列は同じだが、シェルに渡る「コードそのもの」が異なっていることが確認できた。
 
+### 実験2: 環境変数のスコープと優先順位（シャドーイング）
+
+- PR: [#15](https://github.com/urchin-hat/study-github-action/pull/15)
+- Workflow Run: [35973010679](https://github.com/urchin-hat/study-github-action/actions/runs/35973010679)
+
+実行出力結果：
+```text
+=== Step 1 ===
+LEVEL: step
+SHARED: from-workflow
+JOB_ONLY: from-job
+STEP_ONLY: from-step1
+
+=== Step 2 ===
+LEVEL: job
+STEP_ONLY: ''
+```
+
+#### 分かったこと
+- **優先順位（シャドーイング）**: `Step -> Job -> Workflow` の順で、より狭いスコープで定義された環境変数が優先して上書きされる（Step 1 では `LEVEL=step` が勝つ）。
+- **スコープ（有効範囲）**:
+  - 外側のスコープ（WorkflowやJob）で定義された変数は、内側のStepへ引き継がれる（`SHARED`、`JOB_ONLY` がStep 1 で参照可能）。
+  - Stepレベルで定義された `env`（`STEP_ONLY` や Step 1 の `LEVEL=step`）は、**そのStepのプロセス内でのみ有効**であり、後続のStep 2 では `STEP_ONLY` は空になり、`LEVEL` もJobレベルの `job` に戻る。
+
+
 
 ## つまずいた点
 
