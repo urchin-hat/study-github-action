@@ -14,35 +14,31 @@ on:
   workflow_dispatch:
 
 jobs:
-  job-a:
+  test-job:
     runs-on: "ubuntu-latest"
-    # Job Outputsを定義して後続へ公開
-    outputs:
-      my_token: ${{ steps.step1.outputs.token }}
     steps:
-      - name: "Generate data and outputs"
-        id: step1
+      - name: "Simulate test failure"
         run: |
-          echo "Job A started at: $(date +'%H:%M:%S')"
-          # 1. ファイルを作ってみる
-          echo "Created in job-a" > job_a_file.txt
-          # 2. 環境変数をセットしてみる
-          echo "MY_VAR=from-job-a" >> "$GITHUB_ENV"
-          # 3. Step Output をセットする
-          echo "token=secret-token-xyz" >> "$GITHUB_OUTPUT"
-          sleep 2
-          echo "Job A finished at: $(date +'%H:%M:%S')"
+          echo "Running test suite..."
+          echo "Error: 1 test failed!"
+          exit 1
 
-  job-b:
+  # 1. 通常の後続Job（暗黙の if: success() なので、test-job失敗によりスキップされる）
+  deploy-job:
     runs-on: "ubuntu-latest"
-    needs: [job-a]
+    needs: [test-job]
     steps:
-      - name: "Verify isolation and receive output"
+      - name: "Deploy application"
+        run: echo "Deploying to production..."
+
+  # 2. 常時実行の後続Job（if: always() なので、test-job失敗でも動く）
+  notify-job:
+    runs-on: "ubuntu-latest"
+    needs: [test-job]
+    if: always()
+    steps:
+      - name: "Send notification"
         run: |
-          echo "Job B started at: $(date +'%H:%M:%S')"
-          echo "=== 1. ファイルの確認 ==="
-          ls job_a_file.txt || echo "File not found! (別マシンなので存在しない)"
-          echo "=== 2. 環境変数の確認 ==="
-          echo "MY_VAR: '$MY_VAR' (別マシンなので空)"
-          echo "=== 3. Job Outputsの確認 ==="
-          echo "Token from job-a: ${{ needs.job-a.outputs.my_token }}"
+          echo "=== Notification Service ==="
+          echo "test-job result was: ${{ needs.test-job.result }}"
+          echo "Alert: Deployment was prevented because test-job failed."
