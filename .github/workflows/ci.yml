@@ -129,3 +129,21 @@ jobs:
           # Terminate server
           kill $SERVER_PID
           echo "Verification passed successfully!"
+
+  security_injection_test:
+    name: "Security: Script Injection Test"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    steps:
+      - name: "Vulnerable handling (Direct interpolation in run)"
+        run: |
+          echo "=== 1. Vulnerable Example: Direct Interpolation ==="
+          echo "Input was: ${{ 'Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "' }}"
+
+      - name: "Safe handling (Pass via Environment Variable)"
+        env:
+          UNTRUSTED_INPUT: ${{ 'Fix bug"; echo "🚨 [EXPLOIT] Injected command executed! 🚨"; echo "' }}
+        run: |
+          echo "=== 2. Safe Example: Pass via Environment Variable ==="
+          echo "Input was: $UNTRUSTED_INPUT"
+
