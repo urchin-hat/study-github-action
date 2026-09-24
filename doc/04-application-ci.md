@@ -150,9 +150,27 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 ### 実験3: `strategy.matrix` による複数Goバージョンの並列テスト
 
 - PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- Workflow Run: [36016974349](https://github.com/urchin-hat/study-github-action/actions/runs/36016974349)
 - 目的:
   - `strategy.matrix` で `go-version: ["1.21", "1.22", "1.23"]` を指定し、3バージョンのテストが別々のRunnerで並列実行されることを確認する。
   - 後続の `build` Job（`needs: [lint, test]`）が、3つのMatrixテストすべてが完了・成功するまで待機してから起動することを確認する。
+
+#### 実行結果
+- 各Jobのステータスと実行時間:
+  - `Lint & Format`: ✅ **success** (22秒)
+  - `Unit Test (Go 1.21)`: ✅ **success** (27秒)
+  - `Unit Test (Go 1.22)`: ✅ **success** (27秒)
+  - `Unit Test (Go 1.23)`: ✅ **success** (27秒)
+  - `Build Binary`: ✅ **success** (24秒)
+- 実行順序:
+  - `Lint & Format` と、3つのMatrixテスト（Go 1.21 / 1.22 / 1.23）の計4ジョブが同時にRunnerへ割り当てられ、一斉に並列稼働した。
+  - 4つの並列ジョブがすべて正常終了した後に、後続の `Build Binary` が起動してバイナリが生成された。
+
+#### 分かったこと
+- **Matrixによる並列展開**:
+  - `strategy.matrix` に配列を渡すだけで、GitHub Actionsが自動的にRunnerを複数台プロビジョニングし、各バージョンを並列実行してくれる。
+- **`needs` によるMatrix待機**:
+  - 後続のJobで `needs: [test]` と指定した場合、Matrixの特定バージョンではなく「Matrixで展開されたすべてのジョブ」の完了・成功を待ってから実行されることが確認できた。
 
 ## つまずいた点
 
