@@ -196,6 +196,38 @@
 - **防御は必ず `env:` を介すこと**:
   - `env:` で一度環境変数に格納してから `$VAR`（bashの場合）で参照すれば、完全にインジェクションを防ぐことができる。
 
+### 実験3: `vars` と `secrets` の挙動比較と自動マスキングの検証
+
+- PR: [#19](https://github.com/urchin-hat/study-github-action/pull/19)
+- Workflow Run: [36025610401](https://github.com/urchin-hat/study-github-action/actions/runs/36025610401)（Job: `Security: Script Injection Test`）
+- 目的:
+  - リポジトリに非機密変数 `vars.TEST_VAR`（`non-secret-app-setting`）とシークレット `secrets.TEST_SECRET`（`my-super-secret-password-12345`）を登録。
+  - ログ出力における挙動（平文表示 vs 自動マスキング `***`）を確認する。
+  - `base64` エンコードした際にマスキングをすり抜けるかどうかの落とし穴を検証する。
+
+#### 実行結果
+- 実行ログ:
+  ```text
+  === 1. Normal Variable (vars) ===
+  Variable value is: non-secret-app-setting
+
+  === 2. Secret (secrets) Automatic Masking ===
+  Secret value is: ***
+
+  === 3. Masking Bypass Pitfall (Base64) ===
+  Base64 encoded secret is: ***
+  ```
+
+#### 分かったこと
+- **`vars` は平文で表示**:
+  - `vars.TEST_VAR` は意図通り平文でそのままログに出力される。環境名やエンドポイントなど、見えても良い設定値の置き場として機能する。
+- **`secrets` は自動で `***` に置換**:
+  - `secrets.TEST_SECRET` の値はランナーがメモリ上で検知し、ログ出力ストリーム内で完全に `***` にマスキングされた。
+- **最新ランナーの強力なマスキング保護（Base64も自動検知！）**:
+  - 当初の予想では「Base64エンコードすると平文のBase64文字列として露出する」と思われたが、**近年のGitHub ActionsランナーはBase64エンコードされたバリアントも自動計算してマスキング（`***`）する** よう進化していることが判明した！
+  - ただし、文字の分割出力やカスタム暗号化など未知の変換を施すと漏洩リスクがあるため、「ログにシークレットを渡さない・出力させない」という根本原則が最重要であることに変わりはない。
+
+
 
 
 ## つまずいた点
