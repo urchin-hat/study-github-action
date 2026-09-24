@@ -15,7 +15,7 @@ GitLab CI/CDの利用経験がある筆者が、GitHub Actionsを基礎から学
 | --- | --- | --- | --- |
 | 00 | Hello World | [#3](https://github.com/urchin-hat/study-github-action/issues/3) | 完了 |
 | 01 | WorkflowのTrigger | [#4](https://github.com/urchin-hat/study-github-action/issues/4) | 完了 |
-| 02 | Contextと変数 | [#5](https://github.com/urchin-hat/study-github-action/issues/5) | 学習中 |
+| 02 | Contextと変数 | [#5](https://github.com/urchin-hat/study-github-action/issues/5) | 完了 |
 | 03 | Jobの依存関係と並列実行 | [#6](https://github.com/urchin-hat/study-github-action/issues/6) | 未着手 |
 | 04 | サンプルアプリのCI | [#7](https://github.com/urchin-hat/study-github-action/issues/7) | 未着手 |
 | 05 | CacheとArtifact | [#8](https://github.com/urchin-hat/study-github-action/issues/8) | 未着手 |
