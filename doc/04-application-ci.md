@@ -175,9 +175,39 @@ GitLab CI/CDではJobごとにDockerコンテナイメージ（`image: golang:1.
 ### 実験4: `fail-fast` による実行中ジョブの強制キャンセル挙動
 
 - PR: [#17](https://github.com/urchin-hat/study-github-action/pull/17)
+- Workflow Run: [36017247969](https://github.com/urchin-hat/study-github-action/actions/runs/36017247969)
 - 目的:
   - `Go 1.21` を意図的に即座に失敗（`exit 1`）させ、並列実行中である `Go 1.22` と `Go 1.23` がデフォルトの `fail-fast: true` によってどのように扱われるかを確認する。
   - 後続の `Build Binary` がスキップされることを確認する。
+
+#### 実行結果
+- 各Jobのステータス:
+  - `Lint & Format`: ✅ **success** (26秒)
+  - `Unit Test (Go 1.21)`: ❌ **failing** (16秒で `exit 1` により異常終了)
+  - `Unit Test (Go 1.22)`: ⚪ **cancelled** (29秒で強制打ち切り)
+  - `Unit Test (Go 1.23)`: ⚪ **cancelled** (29秒で強制打ち切り)
+  - `Build Binary`: ⚪ **skipped** (前段失敗のためスキップ)
+- アノテーション（GitHub Actionsのキャンセル理由ログ）:
+  ```text
+  X The strategy configuration was canceled because "test._1_21" failed
+  Unit Test (Go 1.22): .github#1
+  X The operation was canceled.
+  Unit Test (Go 1.22): .github#12
+
+  X The strategy configuration was canceled because "test._1_21" failed
+  Unit Test (Go 1.23): .github#1
+  X The operation was canceled.
+  Unit Test (Go 1.23): .github#12
+  ```
+
+#### 分かったこと
+- **デフォルトの `fail-fast: true` による道連れキャンセル**:
+  - GitLab CI/CD（`parallel: matrix`）の感覚では「別マシンで並走しているのだから最後まで動くはず」と予想するが、GitHub Actionsでは **1つが失敗した瞬間に実行中だった他の全Matrixジョブが `cancelled`（強制終了）** された。
+  - メッセージにも明示的に「`The strategy configuration was canceled because "test._1_21" failed`」と記録された。
+- **リソース節約思想**:
+  - ワークフロー全体がFailure確定となった時点で、無駄なRunner実行時間と課金枠を消費しないよう即座に停止する思想が徹底されている。
+- **最後まで完走させたい場合**:
+  - 各バージョンの成否マトリックス（〇/×表）をすべて確認したい場合は、`strategy: { fail-fast: false }` を明示的に指定する必要がある。
 
 ## つまずいた点
 
