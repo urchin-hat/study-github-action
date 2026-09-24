@@ -21,6 +21,7 @@
 | `artifacts:reports:dotenv` | `jobs.<job_id>.outputs` | Job間で小さな文字列データを渡す |
 | `timeout` | `timeout-minutes` | Jobの最大実行時間制限 |
 | `allow_failure: true` | `continue-on-error: true` | Jobの失敗を許容して後続を継続する |
+| `retry` | 標準構文なし（手動Re-run、またはAction/スクリプトで実装） | 失敗時の自動リトライ |
 
 GitLab CI/CDでは `stages: [build, test, deploy]` のようにパイプライン全体の「フェーズ」を明示的に定義し、各Jobがどのstageに属するかを指定する（ステージ内は並列、ステージ間は直列）。
 一方、GitHub Actionsにはステージという概念自体がなく、**全Jobがデフォルトで並列に起動**し、順序を作りたい場合のみ **`needs` でJob同士を個別に結線（DAG: 有向非巡回グラフ）** する。
@@ -94,6 +95,23 @@ Section 02のPR #15が`main`へmergeされたことを受け、`main`から`less
 2. エラー許容（`continue-on-error`）:
    - 予想: ワークフロー全体は成功（緑）になる。
    - 実際: そのとおり。GitLab CI/CDの `allow_failure: true` に相当し、Jobが失敗しても後続Jobは通常どおり実行され、ワークフロー全体も成功（Success）として完了する。
+
+### 2026-09-24: リトライの仕様（手動 vs 自動）
+
+- 疑問: ジョブ失敗時のリトライは手動実行のみか？自動リトライ構文はあるか？
+- 実際:
+  - **標準構文にリトライキーワードはない**:
+    - GitLab CI/CD のような `retry: 2` や `retry: { max: 2, when: runner_system_failure }` といったネイティブなYAML構文は GitHub Actions には存在しない。
+  - **手動リトライ**:
+    - GitHub Web UI から「Re-run failed jobs（失敗したJobのみ再実行）」または「Re-run all jobs」が可能。
+    - GitHub CLI からも `gh run rerun <id> --failed` で失敗Jobのみピンポイント再実行できる。
+  - **自動リトライを実現する実務パターン**:
+    1. **Step単位のリトライAction（最も一般的）**:
+       - `nick-fields/retry@v3` などのMarketplace Actionを使い、flakyなテストやネットワーク通信ステップ単位で `max_attempts: 3` を設定する。
+    2. **シェルスクリプトでの自前ループ**:
+       - `run` 内で `for i in {1..3}; do ... && break || sleep 5; done` のように記述する。
+    3. **Job単位のAPIリラン**:
+       - 失敗時に `actions/github-script` などで GitHub Re-run API を呼び出す（構成が大きくなるため稀）。
 
 
 
@@ -224,4 +242,7 @@ Downstream job executed successfully because flaky-job was allowed to fail!
 - **タイムアウトとエラー許容**:
   - デフォルトタイムアウト（6時間）の罠を避けるため、`timeout-minutes` の設定を習慣化する。
   - 許容可能なテスト失敗には `continue-on-error: true` を活用する。
+- **リトライの仕様（GitLab CI/CDとの決定的な違い）**:
+  - GitHub Actions標準の構文には `retry` キーワードが存在しない。
+  - 手動リラン（失敗Jobのみの再実行）は標準サポートされているが、自動リトライを行うには `nick-fields/retry` などのサードパーティActionをStep単位で使うか、シェルスクリプトでループ処理を記述する必要がある。
 
