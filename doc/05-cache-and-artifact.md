@@ -121,6 +121,24 @@ GitLab CI/CDでは `artifacts:` と書くだけで後続ステージのJobに自
   - 1回目の実行で「Cache Miss（Not Found）」となり、ジョブ終了時にキャッシュが保存（Saved）されることを確認する。
   - 2回目の実行で「Cache Hit（Restored!）」となり、キャッシュが正しく復元されることを確認する。
 
+#### 1回目実行（Cache Miss & Save）
+- Workflow Run: [36022552160](https://github.com/urchin-hat/study-github-action/actions/runs/36022552160)
+- `Cache Go build cache` ステップログ（復元フェーズ）:
+  ```text
+  Cache not found for input keys: Linux-go-build-62f272172f2c8e7dd7e5fbf818727e328fbd6f6fb08000d468c62f04e5704b54, Linux-go-build-
+  ```
+  - キャッシュが存在しないため「Cache not found」となったが、エラーにならず正常系として後続ビルドへ進んだ。
+- `Post Cache Go build cache` ステップログ（保存フェーズ）:
+  ```text
+  [command]/usr/bin/tar --posix -cf cache.tzst ...
+  Sent 15869384 of 15869384 (100.0%), 18.0 MBs/sec
+  Cache saved with key: Linux-go-build-62f272172f2c8e7dd7e5fbf818727e328fbd6f6fb08000d468c62f04e5704b54
+  ```
+  - ジョブ終了時に約15.8MBのGoビルドキャッシュがクラウドへ保存された。
+
+#### 2回目実行（Cache Hit）
+（次の実行で確認します）
+
 ## つまずいた点
 
 （実験を通して記録します）
