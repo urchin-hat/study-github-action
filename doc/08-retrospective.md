@@ -177,10 +177,26 @@
     - **実行時間（Duration）**: `updated_at - run_started_at`
     - リストをソートして **P95実行時間** や **成功率（SLO達成率）** を算出。
 - **レベル3: SREの本番運用！「CIオブザーバビリティ基盤」への流し込み（業界標準）**:
-  - ① **Datadog CI Visibility**:
-    - Webhookを登録するだけで、P95完了時間、キュー時間、そして最大の敵である **「Flakyテスト（不安定テスト）の自動検知ランキング」** を自動提供。
+  - ① **Datadog CI Visibility / New Relic CI/CD Visibility**:
+    - Webhookや公式Action（`newrelic/github-actions-telemetry-action`）を登録するだけで、P95完了時間、キュー時間、そして最大の敵である **「Flakyテスト（不安定テスト）の自動検知ランキング」** を自動提供。
+    - New RelicではNRQL（`SELECT percentile(duration, 95) FROM GitHubActionsWorkflowJob`）を使って本番サーバーのAPMと同じ画面でCIのSLOを一元監視可能。
   - ② **GitHub Webhooks (`workflow_run`, `workflow_job`) + 自社監視**:
     - イベントをLambda経由でPrometheus / BigQuery / CloudWatchへ投入し、Grafanaで本番サービスと同じダッシュボード＆Slackアラートを構築。
+
+### 2026-09-25: 開発指標として取得できる重要メトリクス（DORAと健康診断）
+- **① 世界標準！DORAメトリクス（Four Keys）**:
+  - **デプロイ頻度 (Deployment Frequency)**: `environment: production` の完了数（1日○回/週○回）。
+  - **変更のリードタイム (Lead Time for Changes)**: コミット作成から本番デプロイ完了までの時間。
+  - **変更障害率 (Change Failure Rate)**: 本番デプロイ後にロールバックやHotfixが必要になった割合。
+  - **サービス復旧時間 (MTTR / Time to Restore Service)**: 本番障害発生から修正デプロイ完了までの復旧時間。
+- **② CI / テストパイプラインの健康度**:
+  - **キュー待ち時間 (Queue Wait Time)**: PRを出してからランナーが起動するまでの待ち時間（ランナー枠不足の検知）。
+  - **Flakiness率 (Flaky Test Rate)**: リトライで通った不安定テストの割合（テスト信頼性の指標）。
+  - **キャッシュヒット率 (Cache Hit Ratio)**: ビルドキャッシュが正常に効いているかの監視。
+- **③ PR / レビュープロセスの健全度**:
+  - **PRサイクルタイム (Time to Merge)**: PR作成からマージまでの総時間（プロセスの詰まり検知）。
+  - **初回レビューまでの時間 (Time to First Review)**: PR作成から最初のレビューがつくまでの時間。
+  - **PRサイズ (Lines of Code)**: 差分行数（300行以内を推奨、巨大PRはバグと遅延の主因）。
 
 ## 試したことと結果
 
