@@ -21,7 +21,7 @@ GitLab CI/CDの利用経験がある筆者が、GitHub Actionsを基礎から学
 | 05 | CacheとArtifact | [#8](https://github.com/urchin-hat/study-github-action/issues/8) | 完了 |
 | 06 | Workflowのセキュリティ | [#9](https://github.com/urchin-hat/study-github-action/issues/9) | 完了 |
 | 07 | Environmentを使ったDeploy | [#10](https://github.com/urchin-hat/study-github-action/issues/10) | 完了 |
-| 08 | 学習内容の振り返り | [#11](https://github.com/urchin-hat/study-github-action/issues/11) | 未着手 |
+| 08 | 学習内容の振り返り | [#11](https://github.com/urchin-hat/study-github-action/issues/11) | 完了 |
 
 ## 記録方針
 
