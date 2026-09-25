@@ -168,6 +168,20 @@
   - `gh run view <run-id> --log-failed`: 失敗したステップのログのみをピンポイント抽出。
   - `gh run view <run-id> --log | grep -i "error"`: ターミナルから直接検索。
 
+### 2026-09-25: CI/CDのSLI/SLO数値の取得方法（オブザーバビリティ基盤）
+- **レベル1: GitHub公式「Insights」タブ（手軽な可視化）**:
+  - Web UIの「Insights」➜「Actions」で、ワークフロー別の成功率（Success rate）や平均実行時間（Run duration）の推移をグラフ確認可能。
+- **レベル2: GitHub REST API / CLI からの自前集計（正確な算出）**:
+  - `gh api repos/{owner}/{repo}/actions/runs` で各Runのタイムスタンプを取得し、以下を算出可能：
+    - **キュー待ち時間**: `run_started_at - created_at`
+    - **実行時間（Duration）**: `updated_at - run_started_at`
+    - リストをソートして **P95実行時間** や **成功率（SLO達成率）** を算出。
+- **レベル3: SREの本番運用！「CIオブザーバビリティ基盤」への流し込み（業界標準）**:
+  - ① **Datadog CI Visibility**:
+    - Webhookを登録するだけで、P95完了時間、キュー時間、そして最大の敵である **「Flakyテスト（不安定テスト）の自動検知ランキング」** を自動提供。
+  - ② **GitHub Webhooks (`workflow_run`, `workflow_job`) + 自社監視**:
+    - イベントをLambda経由でPrometheus / BigQuery / CloudWatchへ投入し、Grafanaで本番サービスと同じダッシュボード＆Slackアラートを構築。
+
 ## 試したことと結果
 
 ### 1. リソース使用量（Cache & Artifact Storage）の確認
