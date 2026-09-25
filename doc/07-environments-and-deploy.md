@@ -41,13 +41,25 @@
 ## 実装前の予想
 
 - [ ] GitLab CI/CDの `resource_group` に相当する「同一環境への多重デプロイ防止」は GitHub Actions ではどう実現するか？
-- [ ] GitHub Environment に設定した Secrets は、その Environment を指定していない Job から参照できるか？
+- [x] GitHub Environment に設定した Secrets は、その Environment を指定していない Job から参照できるか？:
+  - 予想: B（`environment: production` を指定したJobにだけ注入され、指定していないJobからは空文字になる）。
+  - 実際: **B（大正解）**。GitLab CI/CDの環境スコープ付き変数と同様、デプロイJob以外からのシークレット漏洩を完全に防ぐ隔離設計になっている。
 - [ ] クラウド（AWS / GCP / Azure）へデプロイする際、なぜ永続的なアクセスキー（APIキー）ではなく OIDC を使うべきなのか？
 
 ## 壁打ちメモ
 
 ### 2026-09-25: Chapter 07開始
 - `main` からブランチ `lesson/07-deploy` を作成。
+
+### 2026-09-25: GitHub Environment とスコープ付きSecretsの隔離（予想と壁打ち）
+- **Environment Secretsのスコープ制限**:
+  - `secrets` をリポジトリ全体に置くと、Lintや単体テストなどのあらゆるJobから読み取れてしまう。
+  - `Environment` にシークレット（例: 本番DBのパスワード等）を紐付けると、`environment: <名前>` が明示されたJobの実行時にのみランナーへ安全に渡される。
+- **Environment Protection Rules（保護ルール）**:
+  - ① **Required reviewers**: 指定したユーザー/チームがWeb UI上で「承認（Review deployments）」を押すまでJobの実行が一時停止し、Secretsも渡されない。
+  - ② **Wait timer**: 承認後またはトリガー後、指定分（例: 5分）待機してからデプロイを開始する。
+  - ③ **Deployment branches**: 例えば `production` には `main` ブランチからの実行しか許可しない、といった制限が可能。
+
 
 ## 試したことと結果
 
