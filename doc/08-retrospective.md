@@ -45,23 +45,113 @@
 
 ## 実装前の予想
 
-- [ ] `needs: [build]` を持つ `verify` ジョブは、`build` が失敗した場合どのようなステータスになるか？
-- [ ] キャッシュ（Cache）が存在しない場合と、アーティファクト（Artifact）が存在しない場合、パイプラインの成否はどう異なるか？
-- [ ] 失敗ジョブの再実行（Re-run failed jobs）をした場合、成功済みの先行ジョブのキャッシュやアーティファクトは後続ジョブで再利用できるか？
+- [x] `needs: [build]` を持つ `verify` ジョブは、`build` が失敗した場合どのようなステータスになるか？:
+  - 予想: B（スキップされる）。
+  - 実際: **B（大正解）**。デフォルトで暗黙の `if: success()` が適用されるため、依存ジョブの失敗時は即座に `Skipped` になる。
+- [x] キャッシュ（Cache）が存在しない場合と、アーティファクト（Artifact）が存在しない場合、パイプラインの成否はどう異なるか？:
+  - 予想: B（Cacheは再生成可能でパイプライン継続、Artifactは後続処理で必須のためパイプライン停止）。
+  - 実際: **B（大正解）**。Cache miss はビルド時間が延びるだけで成功するが、Artifact欠損は後続ジョブがファイルを見つけられず即エラー終了する。
+- [x] 失敗ジョブの再実行（Re-run failed jobs）をした場合、成功済みの先行ジョブのキャッシュやアーティファクトは後続ジョブで再利用できるか？:
+  - 予想: 再利用できる。
+  - 実際: **そのとおり**。成功済みの先行ジョブはスキップされ、先行ジョブが生成・アップロードしたArtifactを再実行された後続ジョブがそのままダウンロードして処理できる。
 
 ## 壁打ちメモ
 
 ### 2026-09-25: Chapter 08開始
 - `main` からブランチ `lesson/08-retrospective` を作成。
 
+### 2026-09-25: ワークフロー全体のDAG構造
+- 完成した `.github/workflows/ci.yml` のジョブ依存グラフ:
+  ```mermaid
+  flowchart TD
+      Trigger(["Trigger: push / pull_request / workflow_dispatch"]) --> Lint["lint (Lint & Format)"]
+      Trigger --> Test["test (Unit Test: Go 1.21, 1.22, 1.23)"]
+      Trigger --> Security["security_injection_test"]
+
+      Lint --> Build["build (Build Binary & Cache & Upload Artifact)"]
+      Test --> Build
+
+      Build --> Verify["verify (Download Artifact & Health Check)"]
+      Build -.->|if: workflow_dispatch| Deploy["deploy (Environment: staging/prod, Concurrency)"]
+
+      style Trigger fill:#f9f,stroke:#333,stroke-width:2px
+      style Build fill:#bbf,stroke:#333
+      style Deploy fill:#bfb,stroke:#333
+  ```
+
+### 2026-09-25: ローカル検証のお作法（プッシュ前に防ぐ）
+- 「プッシュしてGitHub画面を見てタイポに気づく」というトイルを撲滅するためのツール:
+  - ① **`actionlint`**: 専用静的解析ツール。YAML構文、式構文、存在しないコンテキスト、ShellCheck連携によるインジェクション検知。コミット前（pre-commit）や手元で回すのが業界標準。
+  - ② **`act`**: Dockerを用いてGitHub Actionsをローカルエミュレートするツール。`act -n` によるDry-runや、コンテナ内での特定ジョブの事前デバッグが可能。
+  - ③ **GitHub Actions 公式拡張**: VS Code等のエディタ上でリアルタイムにスキーマ検証・補完を行う。
+
+### 2026-09-25: 厳選4問の総復習（GitLab CI/CDとのギャップ・つまずきポイント）
+- **Q1: Cache vs Artifact の本質**:
+  - `Cache`: 高速化目的、消えてもOK（Miss時はゼロから再生成して継続）。
+  - `Artifact`: 成果物受け渡し目的、消えたら困る（欠損時はパイプライン停止）。GitLabと異なり明示的な `actions/download-artifact` が必須。
+- **Q2: GITHUB_TOKEN のデフォルト権限**:
+  - 歴史的経緯から、リポジトリやOrganizationの設定次第で「Read & write（読み書き全開放）」になっていることがある。
+  - トップレベルで `permissions: contents: read` を宣言して最小権限化するのが絶対必須。
+- **Q3: 同一環境への多重デプロイ防止（排他制御）**:
+  - `strategy.max-parallel` は単一Run内のMatrix並列数制御のみ。
+  - 異なるコミットや別々のRunをまたいだ排他制御（キュー待ち）には `concurrency: group: ...` が必要（GitLabの `resource_group` 相当）。
+- **Q4: Trigger における `branches: [main]` の評価対象の違い**:
+  - `push.branches: [main]`: pushされたコミット自身のブランチを判定（作業ブランチへのpushでは動かない）。
+  - `pull_request.branches: [main]`: PRの **取り込み先（base branch）** を判定（作業ブランチからのPRでも動く）。
+
 ## 試したことと結果
 
-（実験後に記録）
+### 1. リソース使用量（Cache & Artifact Storage）の確認
+- GitHub CLI（API）を用いて、リポジトリ内のストレージ使用状況を確認した。
+  ```bash
+  # Cache 使用量の確認
+  gh api repos/urchin-hat/study-github-action/actions/cache/usage
+  ```
+  - **結果**:
+    - `active_caches_count`: 2
+    - `active_caches_size_in_bytes`: 31,772,538 bytes（約 31.7 MB）
+    - ※リポジトリ全体で最大 10 GB まで無料枠で利用可能。
+  ```bash
+  # Artifact 一覧と容量の確認
+  gh api repos/urchin-hat/study-github-action/actions/artifacts
+  ```
+  - **結果**:
+    - ビルドした各バイナリ（`study-server-binary`）が約 4.18 MB ずつ保存されている。
+    - ワークフロー側で `retention-days: 1` を指定したため、24時間後に自動的に `expired: true` となり容量を圧迫しない設計になっていることを確認。
 
-## つまずいた点
+## つまずいた点（全Chapter総まとめ）
 
-（実験後に記録）
+1. **Chapter 01 (Triggers)**:
+   - `github.ref` はPR実行時、作業ブランチではなく `refs/pull/<PR番号>/merge` という合成コミットを参照する。
+   - 新規作成したワークフローの `workflow_dispatch` は、デフォルトブランチ（main）にマージされるまでWeb UIやAPIから実行できない。
+2. **Chapter 02 (Context & Variables)**:
+   - `${{ ... }}` をecho文の文字列としてそのまま書くと、パーサーが式として解釈して構文エラーになる（`${{ '${{ ... }}' }}` とエスケープが必要）。
+   - 式言語の文字列リテラルはシングルクォート `'...'` のみ。
+3. **Chapter 03 (Job Design)**:
+   - GitLab CI/CDの `stages` は存在せず、すべてのJobはデフォルトで完全並列実行される。順序制御には `needs:` が必須。
+   - Jobごとに新しい独立した仮想マシンが割り当てられるため、ファイルやメモリは一切引き継がれない。
+4. **Chapter 05 (Cache & Artifact)**:
+   - GitLab CI/CDのように成果物が自動で後続ジョブに渡らない。必ず `actions/download-artifact` が必要。
+5. **Chapter 06 (Security)**:
+   - Context（PRタイトル等）を `run:` 内に直接埋め込むと、スクリプトインジェクションが成立する。必ず `env:` を介して渡す。
+6. **Chapter 07 (Environments)**:
+   - 並列数制限の `max-parallel` では多重デプロイは防げない。`concurrency` を使う必要がある。
 
 ## ブログへ残したい要点
 
-（実験後に記録）
+### GitLab CI/CD経験者のためのGitHub Actions完全対比マップ
+
+| 観点 | GitLab CI/CD | GitHub Actions | 移行時の重要ポイント |
+| :--- | :--- | :--- | :--- |
+| **構造** | 単一の `.gitlab-ci.yml` | `.github/workflows/*.yml`（複数ファイル） | 責務ごとにファイル分割可能 |
+| **起動条件** | `workflow:rules` / `rules:` | `on:` / `if:` | `on` はRun自体の生成、`if` はJob/Stepの実行可否 |
+| **依存関係** | `stages:` + `needs:` | `needs:` のみ（DAGモデル） | 指定しないと全Jobが完全並列で走る |
+| **環境変数** | すべてシェル環境変数として注入 | Context (`${{ }}`) と環境変数 (`$VAR`) が分離 | 外部入力Contextは必ず `env:` を通す（インジェクション対策） |
+| **成果物** | `artifacts:`（次ステージへ自動展開） | `upload-artifact` / `download-artifact` | 明示的にダウンロードステップを書く必要がある |
+| **キャッシュ** | `cache:`（キーに基づく復元） | `actions/cache` | Missしてもパイプラインは継続する（高速化目的） |
+| **トークン権限** | ジョブ単位のRole/Permission | `permissions:` | トップレベルで `permissions: contents: read` を徹底 |
+| **デプロイ排他** | `resource_group:` | `concurrency: group: ...` | `cancel-in-progress: false` で安全に直列化 |
+| **クラウド認証** | `id_tokens:` (OIDC) | `permissions: id-token: write` | 完全キーレス認証（短命JWTトークン）が標準 |
+| **ローカル検証** | Web UI の CI Lint | `actionlint` / `act` | プッシュ前にローカルで静的解析・Dry-runするのがお作法 |
+| **SRE運用** | パイプライン時間のモニタリング | Actions API / SLI/SLO 管理 | CIも本番サービス。P95 ≤ 5分、Flakyテストは自動隔離（Quarantine） |
+
