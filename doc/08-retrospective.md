@@ -79,11 +79,47 @@
       style Deploy fill:#bfb,stroke:#333
   ```
 
-### 2026-09-25: ローカル検証のお作法（プッシュ前に防ぐ）
+### 2026-09-25: ローカル検証・構文確認のお作法（プッシュ前に防ぐ）
 - 「プッシュしてGitHub画面を見てタイポに気づく」というトイルを撲滅するためのツール:
-  - ① **`actionlint`**: 専用静的解析ツール。YAML構文、式構文、存在しないコンテキスト、ShellCheck連携によるインジェクション検知。コミット前（pre-commit）や手元で回すのが業界標準。
-  - ② **`act`**: Dockerを用いてGitHub Actionsをローカルエミュレートするツール。`act -n` によるDry-runや、コンテナ内での特定ジョブの事前デバッグが可能。
-  - ③ **GitHub Actions 公式拡張**: VS Code等のエディタ上でリアルタイムにスキーマ検証・補完を行う。
+  - ① **`actionlint`（デファクトスタンダード）**:
+    - Go製の超高速静的解析ツール。
+    - YAML構文、`${{ ... }}` 式構文の型チェック、未定義コンテキストの参照検出。
+    - `run:` 内のシェルスクリプトを **ShellCheck** と自動連携して文法・脆弱性（インジェクションリスク等）を検査。
+    - `brew install actionlint` で導入し、`pre-commit` フックや手元CLIで回すのが実務のお作法。
+  - ② **`act` (nektos/act)**:
+    - ローカルのDocker環境を使って、GitHub Actionsの実行環境を手元でエミュレート。
+    - `act -l`: 定義されているジョブ一覧の表示。
+    - `act -n`: 実際にコンテナを起動せずに実行計画をシミュレーション（Dry-run）。
+    - `act -j <job-id>`: 特定のジョブだけを手元コンテナで実行してデバッグ。
+  - ③ **GitHub Actions 公式拡張（VS Code）**:
+    - エディタ上でリアルタイムにスキーマ検証・自動補完・Secrets名補完を提供。
+  - **GitLab CI/CDとの対比**:
+    - GitLabはWeb UI上の「CI Lint」ツールやAPI (`/ci/lint`) が中心だったが、GitHub Actionsは `actionlint` によるローカル完結の検証が主流。
+
+### 2026-09-25: ワークフローを複数に分割する設計判断（可読性とアンチパターン）
+- **GitLab CI/CDとの発想の違い**:
+  - GitLab CI/CD: 1つの `.gitlab-ci.yml` にパイプライン全体を集約し、StageやRulesで分岐する文化。
+  - GitHub Actions: `.github/workflows/*.yml` 配下に、**関心事・トリガー・権限境界ごとに独立したWorkflowファイルへ分割する** 文化。
+- **積極的に分割すべき5大パターン**:
+  - ① **ライフサイクル / トリガー別**:
+    - PRチェック（`on: pull_request`）と本番デプロイ（`on: push: tags`）は分ける（1ファイルにまとめると `if:` だらけになる）。
+  - ② **実行頻度・時間軸別 (Fast Feedback vs Heavy Test)**:
+    - 毎回のPRで走る軽量CI（3分）と、深夜に回す重いE2Eテスト・負荷テスト（`on: schedule` / 30分）は分ける。
+  - ③ **セキュリティ境界（権限）の分離**:
+    - 一般PR向けの Read-only ワークフローと、パッケージ公開やデプロイ用の特権ワークフロー（`permissions: id-token: write` 等）を物理ファイルとして分離。
+  - ④ **モノレポ（Monorepo）でのコンポーネント別**:
+    - `frontend-ci.yml`（`paths: ['frontend/**']`）と `backend-ci.yml`（`paths: ['backend/**']`）。
+  - ⑤ **GitHub Ops / 自動化**:
+    - `labeler.yml`（PRラベル自動付与）、`stale.yml`（休眠Issue自動クローズ）、`dependabot-auto-merge.yml`。
+- **分割しすぎのアンチパターン（やりすぎの弊害）**:
+  - ❌ **「1つのPRで動く一連の依存フロー」をファイルごとに細切れにする**:
+    - 例: `pr-lint.yml`, `pr-test.yml`, `pr-build.yml` とバラバラにする。
+    - **弊害1**: `needs:` は「同一ファイル内のJob間」でしか使えないため、依存制御が極めて困難になる。
+    - **弊害2**: PR画面に大量のWorkflow Runが乱立し、Checks画面がノイズまみれになる。
+    - **弊害3**: 成果物（Artifact）の受け渡しが難しくなる。
+- **💡 黄金の判断基準**:
+  - **「1つのイベントで始まり、`needs` で順序制御したり、Artifactを受け渡し合いたい一連のフロー」** は、1つのWorkflowファイルにまとめ、内部で複数のJob（DAG）として並べる。
+  - **「それ以外の、イベント・権限・実行タイミングが異なるもの」** は、積極的に別ファイルへ分割する。
 
 ### 2026-09-25: 厳選4問の総復習（GitLab CI/CDとのギャップ・つまずきポイント）
 - **Q1: Cache vs Artifact の本質**:
@@ -154,4 +190,14 @@
 | **クラウド認証** | `id_tokens:` (OIDC) | `permissions: id-token: write` | 完全キーレス認証（短命JWTトークン）が標準 |
 | **ローカル検証** | Web UI の CI Lint | `actionlint` / `act` | プッシュ前にローカルで静的解析・Dry-runするのがお作法 |
 | **SRE運用** | パイプライン時間のモニタリング | Actions API / SLI/SLO 管理 | CIも本番サービス。P95 ≤ 5分、Flakyテストは自動隔離（Quarantine） |
+
+### 開発・運用で迷わないための2大ベストプラクティス
+
+1. **プッシュ前の構文チェック（トイル撲滅のお作法）**:
+   - プッシュ後にGitHub上で構文エラーに気づくのは時間と実行枠の浪費。
+   - `actionlint`（スキーマ・式構文・ShellCheck）を手元やpre-commitで自動実行し、重いジョブは `act` でDockerローカル実行して事前に潰す。
+2. **ワークフロー分割の黄金ルール（可読性と依存関係の両立）**:
+   - **分割すべきもの**: トリガーが違う（PR vs Tag）、権限が違う（Read vs Write/OIDC）、実行時間帯が違う（PR軽量CI vs 深夜E2E）。
+   - **1ファイルにまとめるべきもの**: 1つのイベントで始まり、`needs:` による順序制御や Artifact の受け渡しが発生する一連の処理（細切れにしすぎると `needs` が使えずRunが乱立する）。
+
 
