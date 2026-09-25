@@ -40,8 +40,11 @@
 
 ## 実装前の予想
 
-- [ ] GitLab CI/CDの `resource_group` に相当する「同一環境への多重デプロイ防止」は GitHub Actions ではどう実現するか？
+- [x] GitLab CI/CDの `resource_group` に相当する「同一環境への多重デプロイ防止」は GitHub Actions ではどう実現するか？:
+  - 予想: A（`strategy.max-parallel: 1`）。
+  - 実際: **B（`concurrency`）**。`max-parallel` は1つのマトリックスJob内の並列数を絞るだけで、別々のRunやコミット間の排他制御はできない。`concurrency: group: ...` を使うことで、異なるRunやJobをまたいだ同一環境への排他制御・キューイングを実現できる。
 - [x] GitHub Environment に設定した Secrets は、その Environment を指定していない Job から参照できるか？:
+
   - 予想: B（`environment: production` を指定したJobにだけ注入され、指定していないJobからは空文字になる）。
   - 実際: **B（大正解）**。GitLab CI/CDの環境スコープ付き変数と同様、デプロイJob以外からのシークレット漏洩を完全に防ぐ隔離設計になっている。
 - [ ] クラウド（AWS / GCP / Azure）へデプロイする際、なぜ永続的なアクセスキー（APIキー）ではなく OIDC を使うべきなのか？
@@ -59,6 +62,23 @@
   - ① **Required reviewers**: 指定したユーザー/チームがWeb UI上で「承認（Review deployments）」を押すまでJobの実行が一時停止し、Secretsも渡されない。
   - ② **Wait timer**: 承認後またはトリガー後、指定分（例: 5分）待機してからデプロイを開始する。
   - ③ **Deployment branches**: 例えば `production` には `main` ブランチからの実行しか許可しない、といった制限が可能。
+
+### 2026-09-25: concurrency による排他制御（GitLabのresource_groupとの対応）
+- **GitLab CI/CDの `resource_group`**:
+  - 同じ環境へのデプロイが重複して走らないように、先行するJobが終わるまで後続Jobをキュー待ち（待機）させる機能。
+- **GitHub Actionsでの実現方法**:
+  - `concurrency:` を使用する。
+  - 設定例:
+    ```yaml
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    ```
+  - `group`: 排他制御を行う識別子。環境名を含めることで、「stagingへのデプロイ」と「productionへのデプロイ」は独立して並行実行させつつ、「同じ環境への同時デプロイ」だけを排他できる。
+  - `cancel-in-progress`:
+    - `false`（デフォルト）: 先行デプロイが完了するまで後続デプロイは「待機（queued）」する（デプロイに最適）。
+    - `true`: 先行するジョブを即座にキャンセルして最新のものだけを実行する（PRのCIやテストに最適）。
+
 
 
 ## 試したことと結果
