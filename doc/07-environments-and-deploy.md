@@ -83,7 +83,53 @@
 
 ## 試したことと結果
 
+### 実験1: `workflow_dispatch` 手動デプロイ、Artifact連携、GitHub Environment 追跡
+
+- PR: [#20](https://github.com/urchin-hat/study-github-action/pull/20)
+- Workflow Run: [36082400592](https://github.com/urchin-hat/study-github-action/actions/runs/36082400592)（`environment=staging`）
+- 目的:
+  - `workflow_dispatch` で環境名（`staging` / `production`）を選択可能にする。
+  - `build` ジョブが生成したバイナリアーティファクト（`study-server-binary`）を `deploy` ジョブで `actions/download-artifact` して受け取る。
+  - `environment: name: staging, url: https://staging.example.com` を指定し、GitHub Environments のデプロイ履歴に正しく記録されるか確認する。
+
+#### 実行結果
+- 各ジョブのステータス: ✅ **All 8 jobs success**
+- `Deploy to staging` ジョブの実行ログ:
+  ```text
+  === Download binary artifact ===
+  Redirecting to blob download url: ...
+  SHA256 digest of downloaded artifact is 30cb1b21...
+  Artifact download completed successfully.
+
+  === Execute Deployment ===
+  ==========================================
+  🚀 Deploying to Environment: staging
+  👤 Deployed by: urchin-hat
+  🔖 Commit SHA: bd91e1e2a4b73646fa00e8a16f562f98bd5e58b2
+  ==========================================
+  -rwxr-xr-x 1 runner runner 7306544 Sep 25 01:32 bin/study-server
+  Simulating service deployment...
+  ✅ Deployment to staging completed successfully!
+
+  === Complete job ===
+  Evaluated environment url: https://staging.example.com
+  ```
+- GitHub API / UI の確認:
+  - `gh api repos/urchin-hat/study-github-action/deployments` で `environment: "staging"` のデプロイレコードが自動作成され、コミットSHAやデプロイ実施者（`creator: urchin-hat`）が記録されたことを確認。
+
+#### 分かったこと
+- **成果物の確実な受け渡し**:
+  - `build` ジョブでビルドしたバイナリを `upload-artifact` し、`deploy` ジョブで `download-artifact` することで、ビルドとデプロイの明確な関心の分離（ビルド成果物を確実にデプロイする）が実現できた。
+- **GitHub Environment によるデプロイ管理**:
+  - `environment:` を書くだけで、GitHubが自動的に「Deployments」として認識し、いつ、誰が、どのコミットを、どのURLへデプロイしたかを追跡できる。
+
+
 ## つまずいた点
 
+- **新規ワークフローファイルの `workflow_dispatch` はデフォルトブランチにマージされるまで使えない**:
+  - 新規に `.github/workflows/deploy.yml` を作成してブランチへプッシュしても、GitHub Actionsの仕様上 `HTTP 404: workflow deploy.yml not found on the default branch` となり、手動実行することができない。
+  - そのため、学習段階やPR段階で手動デプロイを検証するには、すでに `main` に存在する `.github/workflows/ci.yml` に `workflow_dispatch` の `inputs` と `deploy` ジョブを追加・統合して実験を進めるのが確実である。
+
 ## ブログへ残したい要点
+
 
