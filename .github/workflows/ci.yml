@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target Environment for Deployment"
+        required: true
+        type: choice
+        options:
+          - "staging"
+          - "production"
+        default: "staging"
 
 permissions:
   contents: read
@@ -163,5 +172,44 @@ jobs:
           echo "=== 3. Masking Bypass Pitfall (Base64) ==="
           ENCODED_SECRET=$(echo -n "$MY_SECRET" | base64)
           echo "Base64 encoded secret is: $ENCODED_SECRET"
+
+  deploy:
+    name: "Deploy to ${{ inputs.environment || 'staging' }}"
+    needs: [build]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+      url: "https://${{ inputs.environment || 'staging' }}.example.com"
+    concurrency:
+      group: "deploy-${{ inputs.environment || 'staging' }}"
+      cancel-in-progress: false
+    steps:
+      - name: "Download binary artifact"
+        uses: actions/download-artifact@v4
+        with:
+          name: study-server-binary
+          path: bin/
+
+      - name: "Execute Deployment"
+        env:
+          TARGET_ENV: ${{ inputs.environment || 'staging' }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "=========================================="
+          echo "🚀 Deploying to Environment: $TARGET_ENV"
+          echo "👤 Deployed by: $DEPLOY_ACTOR"
+          echo "🔖 Commit SHA: $COMMIT_SHA"
+          echo "=========================================="
+
+          chmod +x bin/study-server
+          ls -la bin/study-server
+
+          echo "Simulating service deployment..."
+          sleep 3
+          echo "✅ Deployment to $TARGET_ENV completed successfully!"
+
 
 
