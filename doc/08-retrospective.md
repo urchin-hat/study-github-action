@@ -135,6 +135,39 @@
   - `push.branches: [main]`: pushされたコミット自身のブランチを判定（作業ブランチへのpushでは動かない）。
   - `pull_request.branches: [main]`: PRの **取り込み先（base branch）** を判定（作業ブランチからのPRでも動く）。
 
+### 2026-09-25: 運用面・コストの勘所（課金爆発を防ぐ）
+- **① RunnerのOS別コスト倍率（macOSの罠）**:
+  - Linux (Ubuntu): 1倍（標準・最安）
+  - Windows: 2倍
+  - macOS: **10倍**（大型M1/M2ランナーはそれ以上）
+  - 対策: Lintや単体テストなどの非依存処理はLinuxランナーで動かし、macOSランナーは最後のIPA/APKビルドのみに限定する。
+- **② タイムアウト未指定による「6時間放置」の課金事故**:
+  - デフォルトの `timeout-minutes` は **360分（6時間）**。stdin待ちやハングで枠が溶けるのを防ぐため、全Jobに **`timeout-minutes: 5` 〜 `15`** を明示する。
+- **③ Artifactの保存期間（retention-days）によるストレージ課金**:
+  - デフォルト保存期間は **90日間**。毎回数百MBを保存するとアカウントのストレージ枠を食い潰す。PR検証用は **`retention-days: 1` 〜 `3`** に短縮する。
+- **④ PRプッシュ連打によるランナー枠占有**:
+  - PRには **`concurrency: cancel-in-progress: true`** を設定し、最新コミット以外の古い実行を即座に自動キャンセルさせる。
+
+### 2026-09-25: 現場で引っかかりやすい落とし穴（実務あるある）
+- **① 外部Actionのタグ指定リスク**:
+  - タグ（`@v4`）は可変。コミットSHAで固定（`uses: actions/checkout@b4ffde...`）し、Dependabotで自動更新するのが安全。
+- **② `pull_request` vs `pull_request_target` のセキュリティ地雷**:
+  - `pull_request`: ForkからのPRではSecrets空、`GITHUB_TOKEN` はread-only（安全）。
+  - `pull_request_target`: 親リポジトリの全Secretsと書き込み権限で動作する。Fork元のコードをチェックアウトしてスクリプト実行するとSecretsが漏洩する（PwnRequest攻撃）。
+- **③ レートリミット（Docker Hub / GitHub API）**:
+  - ランナーのIP共有による制限。自社レジストリ（ghcr.io）移行やキャッシュ活用で回避。
+- **④ cron定期実行の「60日休眠ルール」**:
+  - リポジトリに60日間コミットがないと、`schedule` ワークフローは自動で無効化される。
+
+### 2026-09-25: ログ調査・RAWログ確認のTips（GitLabとの比較）
+- GitLab CI/CDのプレーンテキストログに慣れていると、GitHub ActionsのアコーディオンUIは一覧検索しづらい。
+- **解決策1: Web UI の RAW ログ表示**:
+  - ジョブ画面右上の **歯車アイコン（⚙️） ➜ `View raw logs`** を開くと、別タブで完全プレーンテキストが開く（`Ctrl+F` で全体一括検索可能）。
+  - `Download log archive` で全ジョブの生ログを一括ZIP取得可能。
+- **解決策2: GitHub CLI (`gh`) によるターミナル閲覧（最速）**:
+  - `gh run view <run-id> --log-failed`: 失敗したステップのログのみをピンポイント抽出。
+  - `gh run view <run-id> --log | grep -i "error"`: ターミナルから直接検索。
+
 ## 試したことと結果
 
 ### 1. リソース使用量（Cache & Artifact Storage）の確認
