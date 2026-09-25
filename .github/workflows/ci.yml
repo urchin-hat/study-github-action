@@ -208,7 +208,7 @@ jobs:
           ls -la bin/study-server
 
           echo "Simulating service deployment..."
-          sleep 3
+          sleep 20
           echo "✅ Deployment to $TARGET_ENV completed successfully!"
 
 
