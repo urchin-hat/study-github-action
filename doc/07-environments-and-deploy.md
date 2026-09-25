@@ -123,6 +123,30 @@
 - **GitHub Environment によるデプロイ管理**:
   - `environment:` を書くだけで、GitHubが自動的に「Deployments」として認識し、いつ、誰が、どのコミットを、どのURLへデプロイしたかを追跡できる。
 
+### 実験2: `concurrency` による同一環境への排他制御（キュー待ち）の実証
+
+- PR: [#20](https://github.com/urchin-hat/study-github-action/pull/20)
+- 実行Run:
+  - Run 1: [36082748285](https://github.com/urchin-hat/study-github-action/actions/runs/36082748285)
+  - Run 2: [36082750821](https://github.com/urchin-hat/study-github-action/actions/runs/36082750821)
+- 目的:
+  - `concurrency: group: deploy-${{ inputs.environment }}, cancel-in-progress: false` を設定。
+  - `staging` への手動デプロイをほぼ同時に2回連続でトリガーし、`deploy` ジョブが重複並行実行されず、直列化（キュー待ち）されるかを確認する。
+
+#### 実行結果
+- 各Runの `Deploy to staging` ジョブの実行タイムスタンプ比較:
+  - **Run 1**: `startedAt: 01:37:16Z` 〜 `completedAt: 01:37:39Z`（約23秒実行）
+  - **Run 2**: `startedAt: 01:37:45Z` 〜 `completedAt: 01:38:11Z`（約26秒実行）
+- 観測された挙動:
+  - 先行ジョブ（LintやTest）は並列に実行されたが、`Deploy to staging` に入った瞬間、同じグループ `deploy-staging` であるため **Run 2 は Run 1 の完了を待機（queued）** した。
+  - Run 1 が `01:37:39Z` に成功した直後の `01:37:45Z` から Run 2 のデプロイが自動的に開始され、正常終了した。
+
+#### 分かったこと
+- **GitLab CI/CDの `resource_group` と完全同等の排他制御**:
+  - `concurrency: group: ...` と `cancel-in-progress: false` を組み合わせることで、同一環境への多重デプロイや順序逆転の事故を確実に防ぐことができる。
+  - `group` 名に環境変数や入力値（`inputs.environment`）を含めることで、環境単位（staging同士、production同士）での独立した排他制御が可能になる。
+
+
 
 ## つまずいた点
 
